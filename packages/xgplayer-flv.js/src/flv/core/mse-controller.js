@@ -190,7 +190,12 @@ class MSEController {
             if (!this._mimeTypes[is.type]) {  // empty, first chance create sourcebuffer
                 firstInitSegment = true;
                 try {
+                    Log.v(this.TAG, `adding SourceBuffer, mimeType: ${mimeType}`);
                     let sb = this._sourceBuffers[is.type] = this._mediaSource.addSourceBuffer(mimeType);
+                    if (sb.mode !== 'sequence') {
+                        Log.v(this.TAG, 'set sourcebuffer mode to sequence');
+                        sb.mode = 'sequence';
+                    }
                     sb.addEventListener('error', this.e.onSourceBufferError);
                     sb.addEventListener('updateend', this.e.onSourceBufferUpdateEnd);
                 } catch (error) {

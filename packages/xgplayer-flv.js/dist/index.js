@@ -12089,7 +12089,12 @@ var MSEController = function () {
                     // empty, first chance create sourcebuffer
                     firstInitSegment = true;
                     try {
+                        _logger2.default.v(this.TAG, 'adding SourceBuffer, mimeType: ' + mimeType);
                         var sb = this._sourceBuffers[is.type] = this._mediaSource.addSourceBuffer(mimeType);
+                        if (sb.mode !== 'sequence') {
+                            _logger2.default.v(this.TAG, 'set sourcebuffer mode to sequence');
+                            sb.mode = 'sequence';
+                        }
                         sb.addEventListener('error', this.e.onSourceBufferError);
                         sb.addEventListener('updateend', this.e.onSourceBufferUpdateEnd);
                     } catch (error) {
