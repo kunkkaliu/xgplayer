@@ -265,8 +265,8 @@ class TransmuxingController {
 
             this._demuxer.onError = this._onDemuxException.bind(this);
             this._demuxer.onMediaInfo = this._onMediaInfo.bind(this);
-
-            this._demuxer.onLoadedSei = this._onLoadedSei.bind(this);
+            this._demuxer.onMetaDataArrived = this._onMetaDataArrived.bind(this);
+            this._demuxer.onScriptDataArrived = this._onScriptDataArrived.bind(this);
 
             this._remuxer.bindDataSource(this._demuxer
                          .bindDataSource(this._ioctl
@@ -316,8 +316,12 @@ class TransmuxingController {
         }
     }
 
-    _onLoadedSei(timestamp, data) {
-        this._emitter.emit(TransmuxingEvents.LOADED_SEI,timestamp,data);
+    _onMetaDataArrived(metadata) {
+        this._emitter.emit(TransmuxingEvents.METADATA_ARRIVED, metadata);
+    }
+
+    _onScriptDataArrived(data) {
+        this._emitter.emit(TransmuxingEvents.SCRIPTDATA_ARRIVED, data);
     }
 
     _onIOSeeked() {
@@ -330,10 +334,10 @@ class TransmuxingController {
 
         if (nextSegmentIndex < this._mediaDataSource.segments.length) {
             this._internalAbort();
-            this._remuxer.flushStashedSamples();
+            this._remuxer && this._remuxer.flushStashedSamples();
             this._loadSegment(nextSegmentIndex);
         } else {
-            this._remuxer.flushStashedSamples();
+            this._remuxer && this._remuxer.flushStashedSamples();
             this._emitter.emit(TransmuxingEvents.LOADING_COMPLETE);
             this._disableStatisticsReporter();
         }
@@ -426,6 +430,7 @@ class TransmuxingController {
         info.loaderType = this._ioctl.loaderType;
         info.currentSegmentIndex = this._currentSegmentIndex;
         info.totalSegmentCount = this._mediaDataSource.segments.length;
+        info.receivedBytes = this._ioctl.receivedDataLength;
 
         this._emitter.emit(TransmuxingEvents.STATISTICS_INFO, info);
     }

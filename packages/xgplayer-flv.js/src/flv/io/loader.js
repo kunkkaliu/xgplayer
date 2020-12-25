@@ -48,6 +48,7 @@ export class BaseLoader {
         this._type = typeName || 'undefined';
         this._status = LoaderStatus.kIdle;
         this._needStash = false;
+        this._receivedLength = 0;
         // callbacks
         this._onContentLengthKnown = null;
         this._onURLRedirect = null;
@@ -57,6 +58,7 @@ export class BaseLoader {
     }
 
     destroy() {
+        this._receivedLength = 0;
         this._status = LoaderStatus.kIdle;
         this._onContentLengthKnown = null;
         this._onURLRedirect = null;
@@ -75,6 +77,10 @@ export class BaseLoader {
 
     get status() {
         return this._status;
+    }
+
+    get receivedLength() {
+      return this._receivedLength;
     }
 
     get needStashBuffer() {

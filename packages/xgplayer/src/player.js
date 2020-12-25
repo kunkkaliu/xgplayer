@@ -203,7 +203,7 @@ class Player extends Proxy {
       }
     }
     if (util.typeOf(url) === 'String') {
-      if (url.indexOf('blob:') > -1 && url === this.video.src) {
+      if (this.config.isLive || (url.indexOf('blob:') > -1 && url === this.video.src)) {
         // 在Chromium环境下用mse url给video二次赋值会导致错误
       } else {
         this.video.src = url

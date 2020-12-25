@@ -18,6 +18,7 @@ let s_error = function () {
     // if (player.error) {
     //   text.innerHTML = player.error
     // } else {
+    if (player.config.customErrTips) return;
     if (player.config.lang && player.config.lang === 'zh-cn') {
       text.innerHTML = player.config.errorTips || `请<span class="xgplayer-error-refresh">刷新</span>试试`
     } else {

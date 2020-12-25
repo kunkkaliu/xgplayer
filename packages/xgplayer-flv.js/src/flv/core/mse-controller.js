@@ -125,7 +125,12 @@ class MSEController {
                 let sb = this._sourceBuffers[type];
                 if (sb) {
                     if (ms.readyState !== 'closed') {
-                        ms.removeSourceBuffer(sb);
+                        // ms edge can throw an error: Unexpected call to method or property access
+                        try {
+                            ms.removeSourceBuffer(sb);
+                        } catch (error) {
+                            Log.e(this.TAG, error.message);
+                        }
                         sb.removeEventListener('error', this.e.onSourceBufferError);
                         sb.removeEventListener('updateend', this.e.onSourceBufferUpdateEnd);
                     }
@@ -167,7 +172,6 @@ class MSEController {
             this._pendingSourceBufferInit.push(initSegment);
             // make sure that this InitSegment is in the front of pending segments queue
             this._pendingSegments[initSegment.type].push(initSegment);
-            // console.log(`${initSegment.type}`, initSegment)
             return;
         }
 
@@ -199,7 +203,7 @@ class MSEController {
             }
             this._mimeTypes[is.type] = mimeType;
         }
-
+        
         if (!deferred) {
             // deferred means this InitSegment has been pushed to pendingSegments queue
             this._pendingSegments[is.type].push(is);

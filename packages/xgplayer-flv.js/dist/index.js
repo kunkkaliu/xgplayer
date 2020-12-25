@@ -123,7 +123,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -150,6 +150,14 @@ var Log = function () {
             if (!Log.ENABLE_ERROR) {
                 return;
             }
+
+            if (console.error) {
+                console.error(str);
+            } else if (console.warn) {
+                console.warn(str);
+            } else {
+                console.log(str);
+            }
         }
     }, {
         key: 'i',
@@ -164,6 +172,12 @@ var Log = function () {
 
             if (!Log.ENABLE_INFO) {
                 return;
+            }
+
+            if (console.info) {
+                console.info(str);
+            } else {
+                console.log(str);
             }
         }
     }, {
@@ -180,6 +194,12 @@ var Log = function () {
             if (!Log.ENABLE_WARN) {
                 return;
             }
+
+            if (console.warn) {
+                console.warn(str);
+            } else {
+                console.log(str);
+            }
         }
     }, {
         key: 'd',
@@ -194,6 +214,12 @@ var Log = function () {
 
             if (!Log.ENABLE_DEBUG) {
                 return;
+            }
+
+            if (console.debug) {
+                console.debug(str);
+            } else {
+                console.log(str);
             }
         }
     }, {
@@ -210,6 +236,8 @@ var Log = function () {
             if (!Log.ENABLE_VERBOSE) {
                 return;
             }
+
+            console.log(str);
         }
     }]);
 
@@ -357,6 +385,175 @@ var NotImplementedException = exports.NotImplementedException = function (_Runti
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
+
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.BaseLoader = exports.LoaderErrors = exports.LoaderStatus = undefined;
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }(); /*
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Copyright (C) 2016 Bilibili. All Rights Reserved.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * @author zheng qian <xqq@xqq.im>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Licensed under the Apache License, Version 2.0 (the "License");
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * you may not use this file except in compliance with the License.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * You may obtain a copy of the License at
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *     http://www.apache.org/licenses/LICENSE-2.0
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Unless required by applicable law or agreed to in writing, software
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * distributed under the License is distributed on an "AS IS" BASIS,
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * See the License for the specific language governing permissions and
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * limitations under the License.
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      */
+
+var _exception = __webpack_require__(1);
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var LoaderStatus = exports.LoaderStatus = {
+    kIdle: 0,
+    kConnecting: 1,
+    kBuffering: 2,
+    kError: 3,
+    kComplete: 4
+};
+
+var LoaderErrors = exports.LoaderErrors = {
+    OK: 'OK',
+    EXCEPTION: 'Exception',
+    HTTP_STATUS_CODE_INVALID: 'HttpStatusCodeInvalid',
+    CONNECTING_TIMEOUT: 'ConnectingTimeout',
+    EARLY_EOF: 'EarlyEof',
+    UNRECOVERABLE_EARLY_EOF: 'UnrecoverableEarlyEof'
+};
+
+/* Loader has callbacks which have following prototypes:
+ *     function onContentLengthKnown(contentLength: number): void
+ *     function onURLRedirect(url: string): void
+ *     function onDataArrival(chunk: ArrayBuffer, byteStart: number, receivedLength: number): void
+ *     function onError(errorType: number, errorInfo: {code: number, msg: string}): void
+ *     function onComplete(rangeFrom: number, rangeTo: number): void
+ */
+
+var BaseLoader = exports.BaseLoader = function () {
+    function BaseLoader(typeName) {
+        _classCallCheck(this, BaseLoader);
+
+        this._type = typeName || 'undefined';
+        this._status = LoaderStatus.kIdle;
+        this._needStash = false;
+        this._receivedLength = 0;
+        // callbacks
+        this._onContentLengthKnown = null;
+        this._onURLRedirect = null;
+        this._onDataArrival = null;
+        this._onError = null;
+        this._onComplete = null;
+    }
+
+    _createClass(BaseLoader, [{
+        key: 'destroy',
+        value: function destroy() {
+            this._receivedLength = 0;
+            this._status = LoaderStatus.kIdle;
+            this._onContentLengthKnown = null;
+            this._onURLRedirect = null;
+            this._onDataArrival = null;
+            this._onError = null;
+            this._onComplete = null;
+        }
+    }, {
+        key: 'isWorking',
+        value: function isWorking() {
+            return this._status === LoaderStatus.kConnecting || this._status === LoaderStatus.kBuffering;
+        }
+    }, {
+        key: 'open',
+
+
+        // pure virtual
+        value: function open(dataSource, range) {
+            throw new _exception.NotImplementedException('Unimplemented abstract function!');
+        }
+    }, {
+        key: 'abort',
+        value: function abort() {
+            throw new _exception.NotImplementedException('Unimplemented abstract function!');
+        }
+    }, {
+        key: 'type',
+        get: function get() {
+            return this._type;
+        }
+    }, {
+        key: 'status',
+        get: function get() {
+            return this._status;
+        }
+    }, {
+        key: 'receivedLength',
+        get: function get() {
+            return this._receivedLength;
+        }
+    }, {
+        key: 'needStashBuffer',
+        get: function get() {
+            return this._needStash;
+        }
+    }, {
+        key: 'onContentLengthKnown',
+        get: function get() {
+            return this._onContentLengthKnown;
+        },
+        set: function set(callback) {
+            this._onContentLengthKnown = callback;
+        }
+    }, {
+        key: 'onURLRedirect',
+        get: function get() {
+            return this._onURLRedirect;
+        },
+        set: function set(callback) {
+            this._onURLRedirect = callback;
+        }
+    }, {
+        key: 'onDataArrival',
+        get: function get() {
+            return this._onDataArrival;
+        },
+        set: function set(callback) {
+            this._onDataArrival = callback;
+        }
+    }, {
+        key: 'onError',
+        get: function get() {
+            return this._onError;
+        },
+        set: function set(callback) {
+            this._onError = callback;
+        }
+    }, {
+        key: 'onComplete',
+        get: function get() {
+            return this._onComplete;
+        },
+        set: function set(callback) {
+            this._onComplete = callback;
+        }
+    }]);
+
+    return BaseLoader;
+}();
+
+/***/ }),
+/* 3 */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -413,6 +610,7 @@ function EventEmitter() {
   EventEmitter.init.call(this);
 }
 module.exports = EventEmitter;
+module.exports.once = once;
 
 // Backwards-compat with node 0.10.x
 EventEmitter.EventEmitter = EventEmitter;
@@ -804,168 +1002,35 @@ function unwrapListeners(arr) {
   return ret;
 }
 
+function once(emitter, name) {
+  return new Promise(function (resolve, reject) {
+    function eventListener() {
+      if (errorListener !== undefined) {
+        emitter.removeListener('error', errorListener);
+      }
+      resolve([].slice.call(arguments));
+    };
+    var errorListener;
 
-/***/ }),
-/* 3 */
-/***/ (function(module, exports, __webpack_require__) {
+    // Adding an error listener is not optional because
+    // if an error is thrown on an event emitter we cannot
+    // guarantee that the actual event we are waiting will
+    // be fired. The result could be a silent way to create
+    // memory or file descriptor leaks, which is something
+    // we should avoid.
+    if (name !== 'error') {
+      errorListener = function errorListener(err) {
+        emitter.removeListener(name, eventListener);
+        reject(err);
+      };
 
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.BaseLoader = exports.LoaderErrors = exports.LoaderStatus = undefined;
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }(); /*
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Copyright (C) 2016 Bilibili. All Rights Reserved.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * @author zheng qian <xqq@xqq.im>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Licensed under the Apache License, Version 2.0 (the "License");
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * you may not use this file except in compliance with the License.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * You may obtain a copy of the License at
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *     http://www.apache.org/licenses/LICENSE-2.0
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      *
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * Unless required by applicable law or agreed to in writing, software
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * distributed under the License is distributed on an "AS IS" BASIS,
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * See the License for the specific language governing permissions and
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      * limitations under the License.
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      */
-
-var _exception = __webpack_require__(1);
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var LoaderStatus = exports.LoaderStatus = {
-    kIdle: 0,
-    kConnecting: 1,
-    kBuffering: 2,
-    kError: 3,
-    kComplete: 4
-};
-
-var LoaderErrors = exports.LoaderErrors = {
-    OK: 'OK',
-    EXCEPTION: 'Exception',
-    HTTP_STATUS_CODE_INVALID: 'HttpStatusCodeInvalid',
-    CONNECTING_TIMEOUT: 'ConnectingTimeout',
-    EARLY_EOF: 'EarlyEof',
-    UNRECOVERABLE_EARLY_EOF: 'UnrecoverableEarlyEof'
-};
-
-/* Loader has callbacks which have following prototypes:
- *     function onContentLengthKnown(contentLength: number): void
- *     function onURLRedirect(url: string): void
- *     function onDataArrival(chunk: ArrayBuffer, byteStart: number, receivedLength: number): void
- *     function onError(errorType: number, errorInfo: {code: number, msg: string}): void
- *     function onComplete(rangeFrom: number, rangeTo: number): void
- */
-
-var BaseLoader = exports.BaseLoader = function () {
-    function BaseLoader(typeName) {
-        _classCallCheck(this, BaseLoader);
-
-        this._type = typeName || 'undefined';
-        this._status = LoaderStatus.kIdle;
-        this._needStash = false;
-        // callbacks
-        this._onContentLengthKnown = null;
-        this._onURLRedirect = null;
-        this._onDataArrival = null;
-        this._onError = null;
-        this._onComplete = null;
+      emitter.once('error', errorListener);
     }
 
-    _createClass(BaseLoader, [{
-        key: 'destroy',
-        value: function destroy() {
-            this._status = LoaderStatus.kIdle;
-            this._onContentLengthKnown = null;
-            this._onURLRedirect = null;
-            this._onDataArrival = null;
-            this._onError = null;
-            this._onComplete = null;
-        }
-    }, {
-        key: 'isWorking',
-        value: function isWorking() {
-            return this._status === LoaderStatus.kConnecting || this._status === LoaderStatus.kBuffering;
-        }
-    }, {
-        key: 'open',
+    emitter.once(name, eventListener);
+  });
+}
 
-
-        // pure virtual
-        value: function open(dataSource, range) {
-            throw new _exception.NotImplementedException('Unimplemented abstract function!');
-        }
-    }, {
-        key: 'abort',
-        value: function abort() {
-            throw new _exception.NotImplementedException('Unimplemented abstract function!');
-        }
-    }, {
-        key: 'type',
-        get: function get() {
-            return this._type;
-        }
-    }, {
-        key: 'status',
-        get: function get() {
-            return this._status;
-        }
-    }, {
-        key: 'needStashBuffer',
-        get: function get() {
-            return this._needStash;
-        }
-    }, {
-        key: 'onContentLengthKnown',
-        get: function get() {
-            return this._onContentLengthKnown;
-        },
-        set: function set(callback) {
-            this._onContentLengthKnown = callback;
-        }
-    }, {
-        key: 'onURLRedirect',
-        get: function get() {
-            return this._onURLRedirect;
-        },
-        set: function set(callback) {
-            this._onURLRedirect = callback;
-        }
-    }, {
-        key: 'onDataArrival',
-        get: function get() {
-            return this._onDataArrival;
-        },
-        set: function set(callback) {
-            this._onDataArrival = callback;
-        }
-    }, {
-        key: 'onError',
-        get: function get() {
-            return this._onError;
-        },
-        set: function set(callback) {
-            this._onError = callback;
-        }
-    }, {
-        key: 'onComplete',
-        get: function get() {
-            return this._onComplete;
-        },
-        set: function set(callback) {
-            this._onComplete = callback;
-        }
-    }]);
-
-    return BaseLoader;
-}();
 
 /***/ }),
 /* 4 */
@@ -1122,9 +1187,10 @@ var TransmuxingEvents = {
   LOADING_COMPLETE: 'loading_complete',
   RECOVERED_EARLY_EOF: 'recovered_early_eof',
   MEDIA_INFO: 'media_info',
+  METADATA_ARRIVED: 'metadata_arrived',
+  SCRIPTDATA_ARRIVED: 'scriptdata_arrived',
   STATISTICS_INFO: 'statistics_info',
-  RECOMMEND_SEEKPOINT: 'recommend_seekpoint',
-  LOADED_SEI: 'loaded_sei'
+  RECOMMEND_SEEKPOINT: 'recommend_seekpoint'
 };
 
 exports.default = TransmuxingEvents;
@@ -1185,8 +1251,11 @@ var defaultConfig = exports.defaultConfig = {
     seekParamEnd: 'bend',
     rangeLoadZeroStart: false,
     customSeekHandler: undefined,
-    reuseRedirectedURL: false
+    reuseRedirectedURL: false,
     // referrerPolicy: leave as unspecified
+
+    headers: undefined,
+    customLoader: undefined
 };
 
 function createDefaultConfig() {
@@ -1226,8 +1295,9 @@ var PlayerEvents = {
   LOADING_COMPLETE: 'loading_complete',
   RECOVERED_EARLY_EOF: 'recovered_early_eof',
   MEDIA_INFO: 'media_info',
-  STATISTICS_INFO: 'statistics_info',
-  LOADED_SEI: 'loaded_sei'
+  METADATA_ARRIVED: 'metadata_arrived',
+  SCRIPTDATA_ARRIVED: 'scriptdata_arrived',
+  STATISTICS_INFO: 'statistics_info'
 };
 
 exports.default = PlayerEvents;
@@ -1262,7 +1332,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -1721,7 +1791,7 @@ var _speedSampler = __webpack_require__(13);
 
 var _speedSampler2 = _interopRequireDefault(_speedSampler);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _fetchStreamLoader = __webpack_require__(26);
 
@@ -1886,7 +1956,9 @@ var IOController = function () {
     }, {
         key: '_selectLoader',
         value: function _selectLoader() {
-            if (this._isWebSocketURL) {
+            if (this._config.customLoader != null) {
+                this._loaderClass = this._config.customLoader;
+            } else if (this._isWebSocketURL) {
                 this._loaderClass = _websocketLoader2.default;
             } else if (_fetchStreamLoader2.default.isSupported()) {
                 this._loaderClass = _fetchStreamLoader2.default;
@@ -2412,6 +2484,14 @@ var IOController = function () {
             }
             return this._speedSampler.lastSecondKBps;
         }
+
+        // 返回已经加载的数据 in KB
+
+    }, {
+        key: 'receivedDataLength',
+        get: function get() {
+            return this._loader.receivedLength / 1024;
+        }
     }, {
         key: 'loaderType',
         get: function get() {
@@ -2575,7 +2655,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -2611,7 +2691,7 @@ var _transmuxingEvents = __webpack_require__(5);
 
 var _transmuxingEvents2 = _interopRequireDefault(_transmuxingEvents);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -2872,8 +2952,8 @@ var TransmuxingController = function () {
 
                 this._demuxer.onError = this._onDemuxException.bind(this);
                 this._demuxer.onMediaInfo = this._onMediaInfo.bind(this);
-
-                this._demuxer.onLoadedSei = this._onLoadedSei.bind(this);
+                this._demuxer.onMetaDataArrived = this._onMetaDataArrived.bind(this);
+                this._demuxer.onScriptDataArrived = this._onScriptDataArrived.bind(this);
 
                 this._remuxer.bindDataSource(this._demuxer.bindDataSource(this._ioctl));
 
@@ -2924,9 +3004,14 @@ var TransmuxingController = function () {
             }
         }
     }, {
-        key: '_onLoadedSei',
-        value: function _onLoadedSei(timestamp, data) {
-            this._emitter.emit(_transmuxingEvents2.default.LOADED_SEI, timestamp, data);
+        key: '_onMetaDataArrived',
+        value: function _onMetaDataArrived(metadata) {
+            this._emitter.emit(_transmuxingEvents2.default.METADATA_ARRIVED, metadata);
+        }
+    }, {
+        key: '_onScriptDataArrived',
+        value: function _onScriptDataArrived(data) {
+            this._emitter.emit(_transmuxingEvents2.default.SCRIPTDATA_ARRIVED, data);
         }
     }, {
         key: '_onIOSeeked',
@@ -2941,10 +3026,10 @@ var TransmuxingController = function () {
 
             if (nextSegmentIndex < this._mediaDataSource.segments.length) {
                 this._internalAbort();
-                this._remuxer.flushStashedSamples();
+                this._remuxer && this._remuxer.flushStashedSamples();
                 this._loadSegment(nextSegmentIndex);
             } else {
-                this._remuxer.flushStashedSamples();
+                this._remuxer && this._remuxer.flushStashedSamples();
                 this._emitter.emit(_transmuxingEvents2.default.LOADING_COMPLETE);
                 this._disableStatisticsReporter();
             }
@@ -3045,6 +3130,7 @@ var TransmuxingController = function () {
             info.loaderType = this._ioctl.loaderType;
             info.currentSegmentIndex = this._currentSegmentIndex;
             info.totalSegmentCount = this._mediaDataSource.segments.length;
+            info.receivedBytes = this._ioctl.receivedDataLength;
 
             this._emitter.emit(_transmuxingEvents2.default.STATISTICS_INFO, info);
         }
@@ -3379,7 +3465,7 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.ErrorDetails = exports.ErrorTypes = undefined;
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _demuxErrors = __webpack_require__(10);
 
@@ -3499,8 +3585,9 @@ var FlvJsPlayer = function (_Player) {
       player.__flv__ = _flv2.default.createPlayer(_this.flvOpts, _this.optionalConfig);
       player.createInstance(player.__flv__);
       if (player.config.isLive) {
+        var liveText = player.config.liveText || '正在直播';
         _xgplayer2.default.util.addClass(player.root, 'xgplayer-is-live');
-        var live = _xgplayer2.default.util.createDom('xg-live', '正在直播', {}, 'xgplayer-live');
+        var live = _xgplayer2.default.util.createDom('xg-live', liveText, {}, 'xgplayer-live');
         player.controls.appendChild(live);
       }
     });
@@ -3518,18 +3605,25 @@ var FlvJsPlayer = function (_Player) {
       flv.load();
       flv.play();
 
-      flv.on(_flv2.default.Events.ERROR, function (e) {
+      flv.on(_flv2.default.Events.ERROR, function (e, detail) {
+        player.emit('flv_error', e, detail);
         player.emit('error', new _xgplayer2.default.Errors('other', player.config.url));
       });
-      flv.on(_flv2.default.Events.LOADED_SEI, function (timestamp, data) {
-        player.emit('loaded_sei', timestamp, data);
-      });
+      // flv.on(Flv.Events.LOADED_SEI, (timestamp, data) => {
+      //   player.emit('loaded_sei', timestamp, data);
+      // })
       flv.on(_flv2.default.Events.STATISTICS_INFO, function (data) {
         player.emit("statistics_info", data);
       });
       flv.on(_flv2.default.Events.MEDIA_INFO, function (data) {
         player.mediainfo = data;
-        player.emit("MEDIA_INFO", data);
+        player.emit("media_info", data);
+      });
+      flv.on(_flv2.default.Events.METADATA_ARRIVED, function (data) {
+        player.emit("metadata_arrived", data);
+      });
+      flv.on(_flv2.default.Events.LOADING_COMPLETE, function (data) {
+        player.emit("loading_complete", data);
       });
       player.once('destroy', function () {
         flv.destroy();
@@ -3570,8 +3664,9 @@ var FlvJsPlayer = function (_Player) {
       }
       player.__flv__ = _flv2.default.createPlayer(mediaDataSource, this.optionalConfig);
 
-      player.__flv__.attachMediaElement(player.video);
-      player.__flv__.load();
+      // player.__flv__.attachMediaElement(player.video)
+      // player.__flv__.load()
+      this.createInstance(player.__flv__);
     }
   }, {
     key: 'switchURL',
@@ -3602,6 +3697,9 @@ var FlvJsPlayer = function (_Player) {
 }(_xgplayer2.default);
 
 FlvJsPlayer.isSupported = _flv2.default.isSupported;
+FlvJsPlayer.Events = _flv2.default.Events;
+FlvJsPlayer.ErrorTypes = _flv2.default.ErrorTypes;
+FlvJsPlayer.ErrorDetails = _flv2.default.ErrorDetails;
 exports.default = FlvJsPlayer;
 module.exports = exports['default'];
 
@@ -3647,6 +3745,8 @@ var _polyfill2 = _interopRequireDefault(_polyfill);
 var _features = __webpack_require__(25);
 
 var _features2 = _interopRequireDefault(_features);
+
+var _loader = __webpack_require__(2);
 
 var _flvPlayer = __webpack_require__(33);
 
@@ -3709,6 +3809,10 @@ var flvjs = {};
 flvjs.createPlayer = createPlayer;
 flvjs.isSupported = isSupported;
 flvjs.getFeatureList = getFeatureList;
+
+flvjs.BaseLoader = _loader.BaseLoader;
+flvjs.LoaderStatus = _loader.LoaderStatus;
+flvjs.LoaderErrors = _loader.LoaderErrors;
 
 flvjs.Events = _playerEvents2.default;
 flvjs.ErrorTypes = _playerErrors.ErrorTypes;
@@ -5255,7 +5359,7 @@ var _browser = __webpack_require__(4);
 
 var _browser2 = _interopRequireDefault(_browser);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _exception = __webpack_require__(1);
 
@@ -5320,6 +5424,7 @@ var FetchStreamLoader = function (_BaseLoader) {
         _this._needStash = true;
 
         _this._requestAbort = false;
+        _this._abortController = null;
         _this._contentLength = null;
         _this._receivedLength = 0;
         return _this;
@@ -5369,6 +5474,13 @@ var FetchStreamLoader = function (_BaseLoader) {
                 referrerPolicy: 'no-referrer-when-downgrade'
             };
 
+            // add additional headers
+            if (_typeof(this._config.headers) === 'object') {
+                for (var _key in this._config.headers) {
+                    headers.append(_key, this._config.headers[_key]);
+                }
+            }
+
             // cors is enabled by default
             if (dataSource.cors === false) {
                 // no-cors means 'disregard cors policy', which can only be used in ServiceWorker
@@ -5383,6 +5495,11 @@ var FetchStreamLoader = function (_BaseLoader) {
             // referrerPolicy from config
             if (dataSource.referrerPolicy) {
                 params.referrerPolicy = dataSource.referrerPolicy;
+            }
+
+            if (self.AbortController) {
+                this._abortController = new self.AbortController();
+                params.signal = this._abortController.signal;
             }
 
             this._status = _loader.LoaderStatus.kConnecting;
@@ -5420,6 +5537,9 @@ var FetchStreamLoader = function (_BaseLoader) {
                     }
                 }
             }).catch(function (e) {
+                if (_this2._abortController && _this2._abortController.signal.aborted) {
+                    return;
+                }
                 _this2._status = _loader.LoaderStatus.kError;
                 if (_this2._onError) {
                     _this2._onError(_loader.LoaderErrors.EXCEPTION, { code: -1, msg: e.message });
@@ -5432,6 +5552,9 @@ var FetchStreamLoader = function (_BaseLoader) {
         key: 'abort',
         value: function abort() {
             this._requestAbort = true;
+            if (this._abortController) {
+                this._abortController.abort();
+            }
         }
     }, {
         key: '_pump',
@@ -5536,7 +5659,7 @@ var _logger = __webpack_require__(0);
 
 var _logger2 = _interopRequireDefault(_logger);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _exception = __webpack_require__(1);
 
@@ -5652,6 +5775,17 @@ var MozChunkedLoader = function (_BaseLoader) {
                 for (var key in headers) {
                     if (headers.hasOwnProperty(key)) {
                         xhr.setRequestHeader(key, headers[key]);
+                    }
+                }
+            }
+
+            // add additional headers
+            if (_typeof(this._config.headers) === 'object') {
+                var _headers = this._config.headers;
+
+                for (var _key in _headers) {
+                    if (_headers.hasOwnProperty(_key)) {
+                        xhr.setRequestHeader(_key, _headers[_key]);
                     }
                 }
             }
@@ -5784,7 +5918,7 @@ var _logger = __webpack_require__(0);
 
 var _logger2 = _interopRequireDefault(_logger);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _exception = __webpack_require__(1);
 
@@ -5941,6 +6075,17 @@ var MSStreamLoader = function (_BaseLoader) {
                 for (var key in headers) {
                     if (headers.hasOwnProperty(key)) {
                         xhr.setRequestHeader(key, headers[key]);
+                    }
+                }
+            }
+
+            // add additional headers
+            if (_typeof(this._config.headers) === 'object') {
+                var _headers = this._config.headers;
+
+                for (var _key in _headers) {
+                    if (_headers.hasOwnProperty(_key)) {
+                        xhr.setRequestHeader(_key, _headers[_key]);
                     }
                 }
             }
@@ -6141,7 +6286,7 @@ var _speedSampler = __webpack_require__(13);
 
 var _speedSampler2 = _interopRequireDefault(_speedSampler);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _exception = __webpack_require__(1);
 
@@ -6310,6 +6455,17 @@ var RangeLoader = function (_BaseLoader) {
                 for (var key in headers) {
                     if (headers.hasOwnProperty(key)) {
                         xhr.setRequestHeader(key, headers[key]);
+                    }
+                }
+            }
+
+            // add additional headers
+            if (_typeof(this._config.headers) === 'object') {
+                var _headers = this._config.headers;
+
+                for (var _key in _headers) {
+                    if (_headers.hasOwnProperty(_key)) {
+                        xhr.setRequestHeader(_key, _headers[_key]);
                     }
                 }
             }
@@ -6545,7 +6701,7 @@ var _logger = __webpack_require__(0);
 
 var _logger2 = _interopRequireDefault(_logger);
 
-var _loader = __webpack_require__(3);
+var _loader = __webpack_require__(2);
 
 var _exception = __webpack_require__(1);
 
@@ -6940,7 +7096,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -7058,7 +7214,7 @@ var FlvPlayer = function () {
             this.e = null;
             this._mediaDataSource = null;
 
-            this._emitter.removeAllListeners();
+            this._emitter && this._emitter.removeAllListeners();
             this._emitter = null;
         }
     }, {
@@ -7204,6 +7360,12 @@ var FlvPlayer = function () {
                 _this3._mediaInfo = mediaInfo;
                 _this3._emitter.emit(_playerEvents2.default.MEDIA_INFO, Object.assign({}, mediaInfo));
             });
+            this._transmuxer.on(_transmuxingEvents2.default.METADATA_ARRIVED, function (metadata) {
+                _this3._emitter.emit(_playerEvents2.default.METADATA_ARRIVED, metadata);
+            });
+            this._transmuxer.on(_transmuxingEvents2.default.SCRIPTDATA_ARRIVED, function (data) {
+                _this3._emitter.emit(_playerEvents2.default.SCRIPTDATA_ARRIVED, data);
+            });
             this._transmuxer.on(_transmuxingEvents2.default.STATISTICS_INFO, function (statInfo) {
                 _this3._statisticsInfo = _this3._fillStatisticsInfo(statInfo);
                 _this3._emitter.emit(_playerEvents2.default.STATISTICS_INFO, Object.assign({}, _this3._statisticsInfo));
@@ -7213,10 +7375,6 @@ var FlvPlayer = function () {
                     _this3._requestSetTime = true;
                     _this3._mediaElement.currentTime = milliseconds / 1000;
                 }
-            });
-
-            this._transmuxer.on(_transmuxingEvents2.default.LOADED_SEI, function (timestamp, data) {
-                _this3._emitter.emit(_playerEvents2.default.LOADED_SEI, timestamp, data);
             });
 
             this._transmuxer.open();
@@ -7630,7 +7788,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -7699,9 +7857,10 @@ var Transmuxer = function () {
             ctl.on(_transmuxingEvents2.default.LOADING_COMPLETE, this._onLoadingComplete.bind(this));
             ctl.on(_transmuxingEvents2.default.RECOVERED_EARLY_EOF, this._onRecoveredEarlyEof.bind(this));
             ctl.on(_transmuxingEvents2.default.MEDIA_INFO, this._onMediaInfo.bind(this));
+            ctl.on(_transmuxingEvents2.default.METADATA_ARRIVED, this._onMetaDataArrived.bind(this));
+            ctl.on(_transmuxingEvents2.default.SCRIPTDATA_ARRIVED, this._onScriptDataArrived.bind(this));
             ctl.on(_transmuxingEvents2.default.STATISTICS_INFO, this._onStatisticsInfo.bind(this));
             ctl.on(_transmuxingEvents2.default.RECOMMEND_SEEKPOINT, this._onRecommendSeekpoint.bind(this));
-            ctl.on(_transmuxingEvents2.default.LOADED_SEI, this._onLoadedSei.bind(this));
         }
     }
 
@@ -7829,48 +7988,57 @@ var Transmuxer = function () {
             });
         }
     }, {
-        key: '_onStatisticsInfo',
-        value: function _onStatisticsInfo(statisticsInfo) {
+        key: '_onMetaDataArrived',
+        value: function _onMetaDataArrived(metadata) {
             var _this6 = this;
 
             Promise.resolve().then(function () {
-                _this6._emitter.emit(_transmuxingEvents2.default.STATISTICS_INFO, statisticsInfo);
+                _this6._emitter.emit(_transmuxingEvents2.default.METADATA_ARRIVED, metadata);
+            });
+        }
+    }, {
+        key: '_onScriptDataArrived',
+        value: function _onScriptDataArrived(data) {
+            var _this7 = this;
+
+            Promise.resolve().then(function () {
+                _this7._emitter.emit(_transmuxingEvents2.default.SCRIPTDATA_ARRIVED, data);
+            });
+        }
+    }, {
+        key: '_onStatisticsInfo',
+        value: function _onStatisticsInfo(statisticsInfo) {
+            var _this8 = this;
+
+            Promise.resolve().then(function () {
+                _this8._emitter.emit(_transmuxingEvents2.default.STATISTICS_INFO, statisticsInfo);
             });
         }
     }, {
         key: '_onIOError',
         value: function _onIOError(type, info) {
-            var _this7 = this;
+            var _this9 = this;
 
             Promise.resolve().then(function () {
-                _this7._emitter.emit(_transmuxingEvents2.default.IO_ERROR, type, info);
+                _this9._emitter.emit(_transmuxingEvents2.default.IO_ERROR, type, info);
             });
         }
     }, {
         key: '_onDemuxError',
         value: function _onDemuxError(type, info) {
-            var _this8 = this;
+            var _this10 = this;
 
             Promise.resolve().then(function () {
-                _this8._emitter.emit(_transmuxingEvents2.default.DEMUX_ERROR, type, info);
+                _this10._emitter.emit(_transmuxingEvents2.default.DEMUX_ERROR, type, info);
             });
         }
     }, {
         key: '_onRecommendSeekpoint',
         value: function _onRecommendSeekpoint(milliseconds) {
-            var _this9 = this;
+            var _this11 = this;
 
             Promise.resolve().then(function () {
-                _this9._emitter.emit(_transmuxingEvents2.default.RECOMMEND_SEEKPOINT, milliseconds);
-            });
-        }
-    }, {
-        key: '_onLoadedSei',
-        value: function _onLoadedSei(timestamp, data) {
-            var _this10 = this;
-
-            Promise.resolve().then(function () {
-                _this10._emitter.emit(_transmuxingEvents2.default.LOADED_SEI, timestamp, data);
+                _this11._emitter.emit(_transmuxingEvents2.default.RECOMMEND_SEEKPOINT, milliseconds);
             });
         }
     }, {
@@ -7906,6 +8074,8 @@ var Transmuxer = function () {
                     Object.setPrototypeOf(data, _mediaInfo2.default.prototype);
                     this._emitter.emit(message.msg, data);
                     break;
+                case _transmuxingEvents2.default.METADATA_ARRIVED:
+                case _transmuxingEvents2.default.SCRIPTDATA_ARRIVED:
                 case _transmuxingEvents2.default.STATISTICS_INFO:
                     this._emitter.emit(message.msg, data);
                     break;
@@ -7939,7 +8109,7 @@ module.exports = exports['default'];
 
 
 Object.defineProperty(exports, "__esModule", {
-  value: true
+    value: true
 });
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
@@ -7984,1125 +8154,1145 @@ var _mediaInfo2 = _interopRequireDefault(_mediaInfo);
 
 var _exception = __webpack_require__(1);
 
-var _events = __webpack_require__(2);
-
-var _events2 = _interopRequireDefault(_events);
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 function Swap16(src) {
-  return src >>> 8 & 0xFF | (src & 0xFF) << 8;
+    return src >>> 8 & 0xFF | (src & 0xFF) << 8;
 }
 
 function Swap32(src) {
-  return (src & 0xFF000000) >>> 24 | (src & 0x00FF0000) >>> 8 | (src & 0x0000FF00) << 8 | (src & 0x000000FF) << 24;
+    return (src & 0xFF000000) >>> 24 | (src & 0x00FF0000) >>> 8 | (src & 0x0000FF00) << 8 | (src & 0x000000FF) << 24;
 }
 
 function ReadBig32(array, index) {
-  return array[index] << 24 | array[index + 1] << 16 | array[index + 2] << 8 | array[index + 3];
+    return array[index] << 24 | array[index + 1] << 16 | array[index + 2] << 8 | array[index + 3];
 }
 
 var FLVDemuxer = function () {
-  function FLVDemuxer(probeData, config) {
-    _classCallCheck(this, FLVDemuxer);
+    function FLVDemuxer(probeData, config) {
+        _classCallCheck(this, FLVDemuxer);
 
-    this.TAG = 'FLVDemuxer';
+        this.TAG = 'FLVDemuxer';
 
-    this._emitter = new _events2.default();
+        this._config = config;
 
-    this._config = config;
+        this._onError = null;
+        this._onMediaInfo = null;
+        this._onMetaDataArrived = null;
+        this._onScriptDataArrived = null;
+        this._onTrackMetadata = null;
+        this._onDataAvailable = null;
 
-    this._onError = null;
-    this._onMediaInfo = null;
-    this._onTrackMetadata = null;
-    this._onDataAvailable = null;
+        this._dataOffset = probeData.dataOffset;
+        this._firstParse = true;
+        this._dispatch = false;
 
-    this._dataOffset = probeData.dataOffset;
-    this._firstParse = true;
-    this._dispatch = false;
+        this._hasAudio = probeData.hasAudioTrack;
+        this._hasVideo = probeData.hasVideoTrack;
 
-    this._hasAudio = probeData.hasAudioTrack;
-    this._hasVideo = probeData.hasVideoTrack;
+        this._hasAudioFlagOverrided = false;
+        this._hasVideoFlagOverrided = false;
 
-    this._hasAudioFlagOverrided = false;
-    this._hasVideoFlagOverrided = false;
+        this._audioInitialMetadataDispatched = false;
+        this._videoInitialMetadataDispatched = false;
 
-    this._audioInitialMetadataDispatched = false;
-    this._videoInitialMetadataDispatched = false;
+        this._mediaInfo = new _mediaInfo2.default();
+        this._mediaInfo.hasAudio = this._hasAudio;
+        this._mediaInfo.hasVideo = this._hasVideo;
+        this._metadata = null;
+        this._audioMetadata = null;
+        this._videoMetadata = null;
 
-    this._mediaInfo = new _mediaInfo2.default();
-    this._mediaInfo.hasAudio = this._hasAudio;
-    this._mediaInfo.hasVideo = this._hasVideo;
-    this._metadata = null;
-    this._audioMetadata = null;
-    this._videoMetadata = null;
+        this._naluLengthSize = 4;
+        this._timestampBase = 0; // int32, in milliseconds
+        this._timescale = 1000;
+        this._duration = 0; // int32, in milliseconds
+        this._durationOverrided = false;
+        this._referenceFrameRate = {
+            fixed: true,
+            fps: 23.976,
+            fps_num: 23976,
+            fps_den: 1000
+        };
 
-    this._naluLengthSize = 4;
-    this._timestampBase = 0; // int32, in milliseconds
-    this._timescale = 1000;
-    this._duration = 0; // int32, in milliseconds
-    this._durationOverrided = false;
-    this._referenceFrameRate = {
-      fixed: true,
-      fps: 23.976,
-      fps_num: 23976,
-      fps_den: 1000
-    };
+        this._flvSoundRateTable = [5500, 11025, 22050, 44100, 48000];
 
-    this._flvSoundRateTable = [5500, 11025, 22050, 44100, 48000];
+        this._mpegSamplingRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
 
-    this._mpegSamplingRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+        this._mpegAudioV10SampleRateTable = [44100, 48000, 32000, 0];
+        this._mpegAudioV20SampleRateTable = [22050, 24000, 16000, 0];
+        this._mpegAudioV25SampleRateTable = [11025, 12000, 8000, 0];
 
-    this._mpegAudioV10SampleRateTable = [44100, 48000, 32000, 0];
-    this._mpegAudioV20SampleRateTable = [22050, 24000, 16000, 0];
-    this._mpegAudioV25SampleRateTable = [11025, 12000, 8000, 0];
+        this._mpegAudioL1BitRateTable = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1];
+        this._mpegAudioL2BitRateTable = [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, -1];
+        this._mpegAudioL3BitRateTable = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, -1];
 
-    this._mpegAudioL1BitRateTable = [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, -1];
-    this._mpegAudioL2BitRateTable = [0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, -1];
-    this._mpegAudioL3BitRateTable = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, -1];
+        this._videoTrack = { type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0 };
+        this._audioTrack = { type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0 };
 
-    this._videoTrack = { type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0 };
-    this._audioTrack = { type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0 };
-
-    this._littleEndian = function () {
-      var buf = new ArrayBuffer(2);
-      new DataView(buf).setInt16(0, 256, true); // little-endian write
-      return new Int16Array(buf)[0] === 256; // platform-spec read, if equal then LE
-    }();
-  }
-
-  _createClass(FLVDemuxer, [{
-    key: 'destroy',
-    value: function destroy() {
-      this._mediaInfo = null;
-      this._metadata = null;
-      this._audioMetadata = null;
-      this._videoMetadata = null;
-      this._videoTrack = null;
-      this._audioTrack = null;
-
-      this._onError = null;
-      this._onMediaInfo = null;
-      this._onTrackMetadata = null;
-      this._onDataAvailable = null;
-
-      this._emitter.removeAllListeners();
-      this._emitter = null;
-    }
-  }, {
-    key: 'bindDataSource',
-    value: function bindDataSource(loader) {
-      loader.onDataArrival = this.parseChunks.bind(this);
-      return this;
+        this._littleEndian = function () {
+            var buf = new ArrayBuffer(2);
+            new DataView(buf).setInt16(0, 256, true); // little-endian write
+            return new Int16Array(buf)[0] === 256; // platform-spec read, if equal then LE
+        }();
     }
 
-    // prototype: function(type: string, metadata: any): void
+    _createClass(FLVDemuxer, [{
+        key: 'destroy',
+        value: function destroy() {
+            this._mediaInfo = null;
+            this._metadata = null;
+            this._audioMetadata = null;
+            this._videoMetadata = null;
+            this._videoTrack = null;
+            this._audioTrack = null;
 
-  }, {
-    key: 'resetMediaInfo',
-    value: function resetMediaInfo() {
-      this._mediaInfo = new _mediaInfo2.default();
-    }
-  }, {
-    key: '_isInitialMetadataDispatched',
-    value: function _isInitialMetadataDispatched() {
-      if (this._hasAudio && this._hasVideo) {
-        // both audio & video
-        return this._audioInitialMetadataDispatched && this._videoInitialMetadataDispatched;
-      }
-      if (this._hasAudio && !this._hasVideo) {
-        // audio only
-        return this._audioInitialMetadataDispatched;
-      }
-      if (!this._hasAudio && this._hasVideo) {
-        // video only
-        return this._videoInitialMetadataDispatched;
-      }
-      return false;
-    }
-
-    // function parseChunks(chunk: ArrayBuffer, byteStart: number): number;
-
-  }, {
-    key: 'parseChunks',
-    value: function parseChunks(chunk, byteStart) {
-      if (!this._onError || !this._onMediaInfo || !this._onTrackMetadata || !this._onDataAvailable) {
-        throw new _exception.IllegalStateException('Flv: onError & onMediaInfo & onTrackMetadata & onDataAvailable callback must be specified');
-      }
-
-      var offset = 0;
-      var le = this._littleEndian;
-
-      if (byteStart === 0) {
-        // buffer with FLV header
-        if (chunk.byteLength > 13) {
-          var probeData = FLVDemuxer.probe(chunk);
-          offset = probeData.dataOffset;
-        } else {
-          return 0;
+            this._onError = null;
+            this._onMediaInfo = null;
+            this._onMetaDataArrived = null;
+            this._onScriptDataArrived = null;
+            this._onTrackMetadata = null;
+            this._onDataAvailable = null;
         }
-      }
-
-      if (this._firstParse) {
-        // handle PreviousTagSize0 before Tag1
-        this._firstParse = false;
-        if (byteStart + offset !== this._dataOffset) {
-          _logger2.default.w(this.TAG, 'First time parsing but chunk byteStart invalid!');
+    }, {
+        key: 'bindDataSource',
+        value: function bindDataSource(loader) {
+            loader.onDataArrival = this.parseChunks.bind(this);
+            return this;
         }
 
-        var v = new DataView(chunk, offset);
-        var prevTagSize0 = v.getUint32(0, !le);
-        if (prevTagSize0 !== 0) {
-          _logger2.default.w(this.TAG, 'PrevTagSize0 !== 0 !!!');
+        // prototype: function(type: string, metadata: any): void
+
+    }, {
+        key: 'resetMediaInfo',
+        value: function resetMediaInfo() {
+            this._mediaInfo = new _mediaInfo2.default();
         }
-        offset += 4;
-      }
-
-      while (offset < chunk.byteLength) {
-        this._dispatch = true;
-
-        var _v = new DataView(chunk, offset);
-
-        if (offset + 11 + 4 > chunk.byteLength) {
-          // data not enough for parsing an flv tag
-          break;
-        }
-
-        var tagType = _v.getUint8(0);
-        var dataSize = _v.getUint32(0, !le) & 0x00FFFFFF;
-
-        if (offset + 11 + dataSize + 4 > chunk.byteLength) {
-          // data not enough for parsing actual data body
-          break;
-        }
-
-        if (tagType !== 8 && tagType !== 9 && tagType !== 18) {
-          _logger2.default.w(this.TAG, 'Unsupported tag type ' + tagType + ', skipped');
-          // consume the whole tag (skip it)
-          offset += 11 + dataSize + 4;
-          continue;
+    }, {
+        key: '_isInitialMetadataDispatched',
+        value: function _isInitialMetadataDispatched() {
+            if (this._hasAudio && this._hasVideo) {
+                // both audio & video
+                return this._audioInitialMetadataDispatched && this._videoInitialMetadataDispatched;
+            }
+            if (this._hasAudio && !this._hasVideo) {
+                // audio only
+                return this._audioInitialMetadataDispatched;
+            }
+            if (!this._hasAudio && this._hasVideo) {
+                // video only
+                return this._videoInitialMetadataDispatched;
+            }
+            return false;
         }
 
-        var ts2 = _v.getUint8(4);
-        var ts1 = _v.getUint8(5);
-        var ts0 = _v.getUint8(6);
-        var ts3 = _v.getUint8(7);
+        // function parseChunks(chunk: ArrayBuffer, byteStart: number): number;
 
-        var timestamp = ts0 | ts1 << 8 | ts2 << 16 | ts3 << 24;
+    }, {
+        key: 'parseChunks',
+        value: function parseChunks(chunk, byteStart) {
+            if (!this._onError || !this._onMediaInfo || !this._onTrackMetadata || !this._onDataAvailable) {
+                throw new _exception.IllegalStateException('Flv: onError & onMediaInfo & onTrackMetadata & onDataAvailable callback must be specified');
+            }
 
-        var streamId = _v.getUint32(7, !le) & 0x00FFFFFF;
-        if (streamId !== 0) {
-          _logger2.default.w(this.TAG, 'Meet tag which has StreamID != 0!');
+            var offset = 0;
+            var le = this._littleEndian;
+
+            if (byteStart === 0) {
+                // buffer with FLV header
+                if (chunk.byteLength > 13) {
+                    var probeData = FLVDemuxer.probe(chunk);
+                    offset = probeData.dataOffset;
+                } else {
+                    return 0;
+                }
+            }
+
+            if (this._firstParse) {
+                // handle PreviousTagSize0 before Tag1
+                this._firstParse = false;
+                if (byteStart + offset !== this._dataOffset) {
+                    _logger2.default.w(this.TAG, 'First time parsing but chunk byteStart invalid!');
+                }
+
+                var v = new DataView(chunk, offset);
+                var prevTagSize0 = v.getUint32(0, !le);
+                if (prevTagSize0 !== 0) {
+                    _logger2.default.w(this.TAG, 'PrevTagSize0 !== 0 !!!');
+                }
+                offset += 4;
+            }
+
+            while (offset < chunk.byteLength) {
+                this._dispatch = true;
+
+                var _v = new DataView(chunk, offset);
+
+                if (offset + 11 + 4 > chunk.byteLength) {
+                    // data not enough for parsing an flv tag
+                    break;
+                }
+
+                var tagType = _v.getUint8(0);
+                var dataSize = _v.getUint32(0, !le) & 0x00FFFFFF;
+
+                if (offset + 11 + dataSize + 4 > chunk.byteLength) {
+                    // data not enough for parsing actual data body
+                    break;
+                }
+
+                if (tagType !== 8 && tagType !== 9 && tagType !== 18) {
+                    _logger2.default.w(this.TAG, 'Unsupported tag type ' + tagType + ', skipped');
+                    // consume the whole tag (skip it)
+                    offset += 11 + dataSize + 4;
+                    continue;
+                }
+
+                var ts2 = _v.getUint8(4);
+                var ts1 = _v.getUint8(5);
+                var ts0 = _v.getUint8(6);
+                var ts3 = _v.getUint8(7);
+
+                var timestamp = ts0 | ts1 << 8 | ts2 << 16 | ts3 << 24;
+
+                var streamId = _v.getUint32(7, !le) & 0x00FFFFFF;
+                if (streamId !== 0) {
+                    _logger2.default.w(this.TAG, 'Meet tag which has StreamID != 0!');
+                }
+
+                var dataOffset = offset + 11;
+
+                switch (tagType) {
+                    case 8:
+                        // Audio
+                        this._parseAudioData(chunk, dataOffset, dataSize, timestamp);
+                        break;
+                    case 9:
+                        // Video
+                        this._parseVideoData(chunk, dataOffset, dataSize, timestamp, byteStart + offset);
+                        break;
+                    case 18:
+                        // ScriptDataObject
+                        this._parseScriptData(chunk, dataOffset, dataSize);
+                        break;
+                }
+
+                var prevTagSize = _v.getUint32(11 + dataSize, !le);
+                if (prevTagSize !== 11 + dataSize) {
+                    _logger2.default.w(this.TAG, 'Invalid PrevTagSize ' + prevTagSize);
+                }
+
+                offset += 11 + dataSize + 4; // tagBody + dataSize + prevTagSize
+            }
+
+            // dispatch parsed frames to consumer (typically, the remuxer)
+            if (this._isInitialMetadataDispatched()) {
+                if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
+                    this._onDataAvailable(this._audioTrack, this._videoTrack);
+                }
+            }
+
+            return offset; // consumed bytes, just equals latest offset index
+        }
+    }, {
+        key: '_parseScriptData',
+        value: function _parseScriptData(arrayBuffer, dataOffset, dataSize) {
+            var scriptData = _amfParser2.default.parseScriptData(arrayBuffer, dataOffset, dataSize);
+
+            if (scriptData.hasOwnProperty('onMetaData')) {
+                if (scriptData.onMetaData == null || _typeof(scriptData.onMetaData) !== 'object') {
+                    _logger2.default.w(this.TAG, 'Invalid onMetaData structure!');
+                    return;
+                }
+                if (this._metadata) {
+                    _logger2.default.w(this.TAG, 'Found another onMetaData tag!');
+                }
+                this._metadata = scriptData;
+                var onMetaData = this._metadata.onMetaData;
+
+                if (this._onMetaDataArrived) {
+                    this._onMetaDataArrived(Object.assign({}, onMetaData));
+                }
+
+                if (typeof onMetaData.hasAudio === 'boolean') {
+                    // hasAudio
+                    if (this._hasAudioFlagOverrided === false) {
+                        this._hasAudio = onMetaData.hasAudio;
+                        this._mediaInfo.hasAudio = this._hasAudio;
+                    }
+                }
+                if (typeof onMetaData.hasVideo === 'boolean') {
+                    // hasVideo
+                    if (this._hasVideoFlagOverrided === false) {
+                        this._hasVideo = onMetaData.hasVideo;
+                        this._mediaInfo.hasVideo = this._hasVideo;
+                    }
+                }
+                if (typeof onMetaData.audiodatarate === 'number') {
+                    // audiodatarate
+                    this._mediaInfo.audioDataRate = onMetaData.audiodatarate;
+                }
+                if (typeof onMetaData.videodatarate === 'number') {
+                    // videodatarate
+                    this._mediaInfo.videoDataRate = onMetaData.videodatarate;
+                }
+                if (typeof onMetaData.width === 'number') {
+                    // width
+                    this._mediaInfo.width = onMetaData.width;
+                }
+                if (typeof onMetaData.height === 'number') {
+                    // height
+                    this._mediaInfo.height = onMetaData.height;
+                }
+                if (typeof onMetaData.duration === 'number') {
+                    // duration
+                    if (!this._durationOverrided) {
+                        var duration = Math.floor(onMetaData.duration * this._timescale);
+                        this._duration = duration;
+                        this._mediaInfo.duration = duration;
+                    }
+                } else {
+                    this._mediaInfo.duration = 0;
+                }
+                if (typeof onMetaData.framerate === 'number') {
+                    // framerate
+                    var fps_num = Math.floor(onMetaData.framerate * 1000);
+                    if (fps_num > 0) {
+                        var fps = fps_num / 1000;
+                        this._referenceFrameRate.fixed = true;
+                        this._referenceFrameRate.fps = fps;
+                        this._referenceFrameRate.fps_num = fps_num;
+                        this._referenceFrameRate.fps_den = 1000;
+                        this._mediaInfo.fps = fps;
+                    }
+                }
+                if (_typeof(onMetaData.keyframes) === 'object') {
+                    // keyframes
+                    this._mediaInfo.hasKeyframesIndex = true;
+                    var keyframes = onMetaData.keyframes;
+                    this._mediaInfo.keyframesIndex = this._parseKeyframesIndex(keyframes);
+                    onMetaData.keyframes = null; // keyframes has been extracted, remove it
+                } else {
+                    this._mediaInfo.hasKeyframesIndex = false;
+                }
+                this._dispatch = false;
+                this._mediaInfo.metadata = onMetaData;
+                _logger2.default.v(this.TAG, 'Parsed onMetaData');
+                if (this._mediaInfo.isComplete()) {
+                    this._onMediaInfo(this._mediaInfo);
+                }
+            }
+
+            if (Object.keys(scriptData).length > 0) {
+                if (this._onScriptDataArrived) {
+                    this._onScriptDataArrived(Object.assign({}, scriptData));
+                }
+            }
+        }
+    }, {
+        key: '_parseKeyframesIndex',
+        value: function _parseKeyframesIndex(keyframes) {
+            var times = [];
+            var filepositions = [];
+
+            // ignore first keyframe which is actually AVC Sequence Header (AVCDecoderConfigurationRecord)
+            for (var i = 1; i < keyframes.times.length; i++) {
+                var time = this._timestampBase + Math.floor(keyframes.times[i] * 1000);
+                times.push(time);
+                filepositions.push(keyframes.filepositions[i]);
+            }
+
+            return {
+                times: times,
+                filepositions: filepositions
+            };
+        }
+    }, {
+        key: '_parseAudioData',
+        value: function _parseAudioData(arrayBuffer, dataOffset, dataSize, tagTimestamp) {
+            if (dataSize <= 1) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid audio packet, missing SoundData payload!');
+                return;
+            }
+
+            if (this._hasAudioFlagOverrided === true && this._hasAudio === false) {
+                // If hasAudio: false indicated explicitly in MediaDataSource,
+                // Ignore all the audio packets
+                return;
+            }
+
+            var le = this._littleEndian;
+            var v = new DataView(arrayBuffer, dataOffset, dataSize);
+
+            var soundSpec = v.getUint8(0);
+
+            var soundFormat = soundSpec >>> 4;
+            if (soundFormat !== 2 && soundFormat !== 10) {
+                // MP3 or AAC
+                this._onError(_demuxErrors2.default.CODEC_UNSUPPORTED, 'Flv: Unsupported audio codec idx: ' + soundFormat);
+                return;
+            }
+
+            var soundRate = 0;
+            var soundRateIndex = (soundSpec & 12) >>> 2;
+            if (soundRateIndex >= 0 && soundRateIndex <= 4) {
+                soundRate = this._flvSoundRateTable[soundRateIndex];
+            } else {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid audio sample rate idx: ' + soundRateIndex);
+                return;
+            }
+
+            var soundSize = (soundSpec & 2) >>> 1; // unused
+            var soundType = soundSpec & 1;
+
+            var meta = this._audioMetadata;
+            var track = this._audioTrack;
+
+            if (!meta) {
+                if (this._hasAudio === false && this._hasAudioFlagOverrided === false) {
+                    this._hasAudio = true;
+                    this._mediaInfo.hasAudio = true;
+                }
+
+                // initial metadata
+                meta = this._audioMetadata = {};
+                meta.type = 'audio';
+                meta.id = track.id;
+                meta.timescale = this._timescale;
+                meta.duration = this._duration;
+                meta.audioSampleRate = soundRate;
+                meta.channelCount = soundType === 0 ? 1 : 2;
+            }
+
+            if (soundFormat === 10) {
+                // AAC
+                var aacData = this._parseAACAudioData(arrayBuffer, dataOffset + 1, dataSize - 1);
+                if (aacData == undefined) {
+                    return;
+                }
+
+                if (aacData.packetType === 0) {
+                    // AAC sequence header (AudioSpecificConfig)
+                    if (meta.config) {
+                        _logger2.default.w(this.TAG, 'Found another AudioSpecificConfig!');
+                    }
+                    var misc = aacData.data;
+                    meta.audioSampleRate = misc.samplingRate;
+                    meta.channelCount = misc.channelCount;
+                    meta.codec = misc.codec;
+                    meta.originalCodec = misc.originalCodec;
+                    meta.config = misc.config;
+                    // The decode result of an aac sample is 1024 PCM samples
+                    meta.refSampleDuration = 1024 / meta.audioSampleRate * meta.timescale;
+                    _logger2.default.v(this.TAG, 'Parsed AudioSpecificConfig');
+
+                    if (this._isInitialMetadataDispatched()) {
+                        // Non-initial metadata, force dispatch (or flush) parsed frames to remuxer
+                        if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
+                            this._onDataAvailable(this._audioTrack, this._videoTrack);
+                        }
+                    } else {
+                        this._audioInitialMetadataDispatched = true;
+                    }
+                    // then notify new metadata
+                    this._dispatch = false;
+                    this._onTrackMetadata('audio', meta);
+
+                    var mi = this._mediaInfo;
+                    mi.audioCodec = meta.originalCodec;
+                    mi.audioSampleRate = meta.audioSampleRate;
+                    mi.audioChannelCount = meta.channelCount;
+                    if (mi.hasVideo) {
+                        if (mi.videoCodec != null) {
+                            mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + ',' + mi.audioCodec + '"';
+                        }
+                    } else {
+                        mi.mimeType = 'video/x-flv; codecs="' + mi.audioCodec + '"';
+                    }
+                    if (mi.isComplete()) {
+                        this._onMediaInfo(mi);
+                    }
+                } else if (aacData.packetType === 1) {
+                    // AAC raw frame data
+                    var dts = this._timestampBase + tagTimestamp;
+                    var aacSample = { unit: aacData.data, length: aacData.data.byteLength, dts: dts, pts: dts };
+                    track.samples.push(aacSample);
+                    track.length += aacData.data.length;
+                } else {
+                    _logger2.default.e(this.TAG, 'Flv: Unsupported AAC data type ' + aacData.packetType);
+                }
+            } else if (soundFormat === 2) {
+                // MP3
+                if (!meta.codec) {
+                    // We need metadata for mp3 audio track, extract info from frame header
+                    var _misc = this._parseMP3AudioData(arrayBuffer, dataOffset + 1, dataSize - 1, true);
+                    if (_misc == undefined) {
+                        return;
+                    }
+                    meta.audioSampleRate = _misc.samplingRate;
+                    meta.channelCount = _misc.channelCount;
+                    meta.codec = _misc.codec;
+                    meta.originalCodec = _misc.originalCodec;
+                    // The decode result of an mp3 sample is 1152 PCM samples
+                    meta.refSampleDuration = 1152 / meta.audioSampleRate * meta.timescale;
+                    _logger2.default.v(this.TAG, 'Parsed MPEG Audio Frame Header');
+
+                    this._audioInitialMetadataDispatched = true;
+                    this._onTrackMetadata('audio', meta);
+
+                    var _mi = this._mediaInfo;
+                    _mi.audioCodec = meta.codec;
+                    _mi.audioSampleRate = meta.audioSampleRate;
+                    _mi.audioChannelCount = meta.channelCount;
+                    _mi.audioDataRate = _misc.bitRate;
+                    if (_mi.hasVideo) {
+                        if (_mi.videoCodec != null) {
+                            _mi.mimeType = 'video/x-flv; codecs="' + _mi.videoCodec + ',' + _mi.audioCodec + '"';
+                        }
+                    } else {
+                        _mi.mimeType = 'video/x-flv; codecs="' + _mi.audioCodec + '"';
+                    }
+                    if (_mi.isComplete()) {
+                        this._onMediaInfo(_mi);
+                    }
+                }
+
+                // This packet is always a valid audio packet, extract it
+                var data = this._parseMP3AudioData(arrayBuffer, dataOffset + 1, dataSize - 1, false);
+                if (data == undefined) {
+                    return;
+                }
+                var _dts = this._timestampBase + tagTimestamp;
+                var mp3Sample = { unit: data, length: data.byteLength, dts: _dts, pts: _dts };
+                track.samples.push(mp3Sample);
+                track.length += data.length;
+            }
+        }
+    }, {
+        key: '_parseAACAudioData',
+        value: function _parseAACAudioData(arrayBuffer, dataOffset, dataSize) {
+            if (dataSize <= 1) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid AAC packet, missing AACPacketType or/and Data!');
+                return;
+            }
+
+            var result = {};
+            var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
+
+            result.packetType = array[0];
+
+            if (array[0] === 0) {
+                result.data = this._parseAACAudioSpecificConfig(arrayBuffer, dataOffset + 1, dataSize - 1);
+            } else {
+                result.data = array.subarray(1);
+            }
+
+            return result;
+        }
+    }, {
+        key: '_parseAACAudioSpecificConfig',
+        value: function _parseAACAudioSpecificConfig(arrayBuffer, dataOffset, dataSize) {
+            var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
+            var config = null;
+
+            /* Audio Object Type:
+               0: Null
+               1: AAC Main
+               2: AAC LC
+               3: AAC SSR (Scalable Sample Rate)
+               4: AAC LTP (Long Term Prediction)
+               5: HE-AAC / SBR (Spectral Band Replication)
+               6: AAC Scalable
+            */
+
+            var audioObjectType = 0;
+            var originalAudioObjectType = 0;
+            var audioExtensionObjectType = null;
+            var samplingIndex = 0;
+            var extensionSamplingIndex = null;
+
+            // 5 bits
+            audioObjectType = originalAudioObjectType = array[0] >>> 3;
+            // 4 bits
+            samplingIndex = (array[0] & 0x07) << 1 | array[1] >>> 7;
+            if (samplingIndex < 0 || samplingIndex >= this._mpegSamplingRates.length) {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: AAC invalid sampling frequency index!');
+                return;
+            }
+
+            var samplingFrequence = this._mpegSamplingRates[samplingIndex];
+
+            // 4 bits
+            var channelConfig = (array[1] & 0x78) >>> 3;
+            if (channelConfig < 0 || channelConfig >= 8) {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: AAC invalid channel configuration');
+                return;
+            }
+
+            if (audioObjectType === 5) {
+                // HE-AAC?
+                // 4 bits
+                extensionSamplingIndex = (array[1] & 0x07) << 1 | array[2] >>> 7;
+                // 5 bits
+                audioExtensionObjectType = (array[2] & 0x7C) >>> 2;
+            }
+
+            // workarounds for various browsers
+            var userAgent = self.navigator.userAgent.toLowerCase();
+
+            if (userAgent.indexOf('firefox') !== -1) {
+                // firefox: use SBR (HE-AAC) if freq less than 24kHz
+                if (samplingIndex >= 6) {
+                    audioObjectType = 5;
+                    config = new Array(4);
+                    extensionSamplingIndex = samplingIndex - 3;
+                } else {
+                    // use LC-AAC
+                    audioObjectType = 2;
+                    config = new Array(2);
+                    extensionSamplingIndex = samplingIndex;
+                }
+            } else if (userAgent.indexOf('android') !== -1) {
+                // android: always use LC-AAC
+                audioObjectType = 2;
+                config = new Array(2);
+                extensionSamplingIndex = samplingIndex;
+            } else {
+                // for other browsers, e.g. chrome...
+                // Always use HE-AAC to make it easier to switch aac codec profile
+                audioObjectType = 5;
+                extensionSamplingIndex = samplingIndex;
+                config = new Array(4);
+
+                if (samplingIndex >= 6) {
+                    extensionSamplingIndex = samplingIndex - 3;
+                } else if (channelConfig === 1) {
+                    // Mono channel
+                    audioObjectType = 2;
+                    config = new Array(2);
+                    extensionSamplingIndex = samplingIndex;
+                }
+            }
+
+            config[0] = audioObjectType << 3;
+            config[0] |= (samplingIndex & 0x0F) >>> 1;
+            config[1] = (samplingIndex & 0x0F) << 7;
+            config[1] |= (channelConfig & 0x0F) << 3;
+            if (audioObjectType === 5) {
+                config[1] |= (extensionSamplingIndex & 0x0F) >>> 1;
+                config[2] = (extensionSamplingIndex & 0x01) << 7;
+                // extended audio object type: force to 2 (LC-AAC)
+                config[2] |= 2 << 2;
+                config[3] = 0;
+            }
+
+            return {
+                config: config,
+                samplingRate: samplingFrequence,
+                channelCount: channelConfig,
+                codec: 'mp4a.40.' + audioObjectType,
+                originalCodec: 'mp4a.40.' + originalAudioObjectType
+            };
+        }
+    }, {
+        key: '_parseMP3AudioData',
+        value: function _parseMP3AudioData(arrayBuffer, dataOffset, dataSize, requestHeader) {
+            if (dataSize < 4) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid MP3 packet, header missing!');
+                return;
+            }
+
+            var le = this._littleEndian;
+            var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
+            var result = null;
+
+            if (requestHeader) {
+                if (array[0] !== 0xFF) {
+                    return;
+                }
+                var ver = array[1] >>> 3 & 0x03;
+                var layer = (array[1] & 0x06) >> 1;
+
+                var bitrate_index = (array[2] & 0xF0) >>> 4;
+                var sampling_freq_index = (array[2] & 0x0C) >>> 2;
+
+                var channel_mode = array[3] >>> 6 & 0x03;
+                var channel_count = channel_mode !== 3 ? 2 : 1;
+
+                var sample_rate = 0;
+                var bit_rate = 0;
+                var object_type = 34; // Layer-3, listed in MPEG-4 Audio Object Types
+
+                var codec = 'mp3';
+
+                switch (ver) {
+                    case 0:
+                        // MPEG 2.5
+                        sample_rate = this._mpegAudioV25SampleRateTable[sampling_freq_index];
+                        break;
+                    case 2:
+                        // MPEG 2
+                        sample_rate = this._mpegAudioV20SampleRateTable[sampling_freq_index];
+                        break;
+                    case 3:
+                        // MPEG 1
+                        sample_rate = this._mpegAudioV10SampleRateTable[sampling_freq_index];
+                        break;
+                }
+
+                switch (layer) {
+                    case 1:
+                        // Layer 3
+                        object_type = 34;
+                        if (bitrate_index < this._mpegAudioL3BitRateTable.length) {
+                            bit_rate = this._mpegAudioL3BitRateTable[bitrate_index];
+                        }
+                        break;
+                    case 2:
+                        // Layer 2
+                        object_type = 33;
+                        if (bitrate_index < this._mpegAudioL2BitRateTable.length) {
+                            bit_rate = this._mpegAudioL2BitRateTable[bitrate_index];
+                        }
+                        break;
+                    case 3:
+                        // Layer 1
+                        object_type = 32;
+                        if (bitrate_index < this._mpegAudioL1BitRateTable.length) {
+                            bit_rate = this._mpegAudioL1BitRateTable[bitrate_index];
+                        }
+                        break;
+                }
+
+                result = {
+                    bitRate: bit_rate,
+                    samplingRate: sample_rate,
+                    channelCount: channel_count,
+                    codec: codec,
+                    originalCodec: codec
+                };
+            } else {
+                result = array;
+            }
+
+            return result;
+        }
+    }, {
+        key: '_parseVideoData',
+        value: function _parseVideoData(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition) {
+            if (dataSize <= 1) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid video packet, missing VideoData payload!');
+                return;
+            }
+
+            if (this._hasVideoFlagOverrided === true && this._hasVideo === false) {
+                // If hasVideo: false indicated explicitly in MediaDataSource,
+                // Ignore all the video packets
+                return;
+            }
+
+            var spec = new Uint8Array(arrayBuffer, dataOffset, dataSize)[0];
+
+            var frameType = (spec & 240) >>> 4;
+            var codecId = spec & 15;
+
+            if (codecId !== 7) {
+                this._onError(_demuxErrors2.default.CODEC_UNSUPPORTED, 'Flv: Unsupported codec in video frame: ' + codecId);
+                return;
+            }
+
+            this._parseAVCVideoPacket(arrayBuffer, dataOffset + 1, dataSize - 1, tagTimestamp, tagPosition, frameType);
+        }
+    }, {
+        key: '_parseAVCVideoPacket',
+        value: function _parseAVCVideoPacket(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition, frameType) {
+            if (dataSize < 4) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid AVC packet, missing AVCPacketType or/and CompositionTime');
+                return;
+            }
+
+            var le = this._littleEndian;
+            var v = new DataView(arrayBuffer, dataOffset, dataSize);
+
+            var packetType = v.getUint8(0);
+            var cts_unsigned = v.getUint32(0, !le) & 0x00FFFFFF;
+            var cts = cts_unsigned << 8 >> 8; // convert to 24-bit signed int
+
+            if (packetType === 0) {
+                // AVCDecoderConfigurationRecord
+                this._parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset + 4, dataSize - 4);
+            } else if (packetType === 1) {
+                // One or more Nalus
+                this._parseAVCVideoData(arrayBuffer, dataOffset + 4, dataSize - 4, tagTimestamp, tagPosition, frameType, cts);
+            } else if (packetType === 2) {
+                // empty, AVC end of sequence
+            } else {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid video packet type ' + packetType);
+                return;
+            }
+        }
+    }, {
+        key: '_parseAVCDecoderConfigurationRecord',
+        value: function _parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset, dataSize) {
+            if (dataSize < 7) {
+                _logger2.default.w(this.TAG, 'Flv: Invalid AVCDecoderConfigurationRecord, lack of data!');
+                return;
+            }
+
+            var meta = this._videoMetadata;
+            var track = this._videoTrack;
+            var le = this._littleEndian;
+            var v = new DataView(arrayBuffer, dataOffset, dataSize);
+
+            if (!meta) {
+                if (this._hasVideo === false && this._hasVideoFlagOverrided === false) {
+                    this._hasVideo = true;
+                    this._mediaInfo.hasVideo = true;
+                }
+
+                meta = this._videoMetadata = {};
+                meta.type = 'video';
+                meta.id = track.id;
+                meta.timescale = this._timescale;
+                meta.duration = this._duration;
+            } else {
+                if (typeof meta.avcc !== 'undefined') {
+                    _logger2.default.w(this.TAG, 'Found another AVCDecoderConfigurationRecord!');
+                }
+            }
+
+            var version = v.getUint8(0); // configurationVersion
+            var avcProfile = v.getUint8(1); // avcProfileIndication
+            var profileCompatibility = v.getUint8(2); // profile_compatibility
+            var avcLevel = v.getUint8(3); // AVCLevelIndication
+
+            if (version !== 1 || avcProfile === 0) {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord');
+                return;
+            }
+
+            this._naluLengthSize = (v.getUint8(4) & 3) + 1; // lengthSizeMinusOne
+            if (this._naluLengthSize !== 3 && this._naluLengthSize !== 4) {
+                // holy shit!!!
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Strange NaluLengthSizeMinusOne: ' + (this._naluLengthSize - 1));
+                return;
+            }
+
+            var spsCount = v.getUint8(5) & 31; // numOfSequenceParameterSets
+            if (spsCount === 0) {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord: No SPS');
+                return;
+            } else if (spsCount > 1) {
+                _logger2.default.w(this.TAG, 'Flv: Strange AVCDecoderConfigurationRecord: SPS Count = ' + spsCount);
+            }
+
+            var offset = 6;
+
+            for (var i = 0; i < spsCount; i++) {
+                var len = v.getUint16(offset, !le); // sequenceParameterSetLength
+                offset += 2;
+
+                if (len === 0) {
+                    continue;
+                }
+
+                // Notice: Nalu without startcode header (00 00 00 01)
+                var sps = new Uint8Array(arrayBuffer, dataOffset + offset, len);
+                offset += len;
+
+                var config = _spsParser2.default.parseSPS(sps);
+                if (i !== 0) {
+                    // ignore other sps's config
+                    continue;
+                }
+
+                meta.codecWidth = config.codec_size.width;
+                meta.codecHeight = config.codec_size.height;
+                meta.presentWidth = config.present_size.width;
+                meta.presentHeight = config.present_size.height;
+
+                meta.profile = config.profile_string;
+                meta.level = config.level_string;
+                meta.bitDepth = config.bit_depth;
+                meta.chromaFormat = config.chroma_format;
+                meta.sarRatio = config.sar_ratio;
+                meta.frameRate = config.frame_rate;
+
+                if (config.frame_rate.fixed === false || config.frame_rate.fps_num === 0 || config.frame_rate.fps_den === 0) {
+                    meta.frameRate = this._referenceFrameRate;
+                }
+
+                var fps_den = meta.frameRate.fps_den;
+                var fps_num = meta.frameRate.fps_num;
+                meta.refSampleDuration = meta.timescale * (fps_den / fps_num);
+
+                var codecArray = sps.subarray(1, 4);
+                var codecString = 'avc1.';
+                for (var j = 0; j < 3; j++) {
+                    var h = codecArray[j].toString(16);
+                    if (h.length < 2) {
+                        h = '0' + h;
+                    }
+                    codecString += h;
+                }
+                meta.codec = codecString;
+
+                var mi = this._mediaInfo;
+                mi.width = meta.codecWidth;
+                mi.height = meta.codecHeight;
+                mi.fps = meta.frameRate.fps;
+                mi.profile = meta.profile;
+                mi.level = meta.level;
+                mi.refFrames = config.ref_frames;
+                mi.chromaFormat = config.chroma_format_string;
+                mi.sarNum = meta.sarRatio.width;
+                mi.sarDen = meta.sarRatio.height;
+                mi.videoCodec = codecString;
+
+                if (mi.hasAudio) {
+                    if (mi.audioCodec != null) {
+                        mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + ',' + mi.audioCodec + '"';
+                    }
+                } else {
+                    mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + '"';
+                }
+                if (mi.isComplete()) {
+                    this._onMediaInfo(mi);
+                }
+            }
+
+            var ppsCount = v.getUint8(offset); // numOfPictureParameterSets
+            if (ppsCount === 0) {
+                this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord: No PPS');
+                return;
+            } else if (ppsCount > 1) {
+                _logger2.default.w(this.TAG, 'Flv: Strange AVCDecoderConfigurationRecord: PPS Count = ' + ppsCount);
+            }
+
+            offset++;
+
+            for (var _i = 0; _i < ppsCount; _i++) {
+                var _len = v.getUint16(offset, !le); // pictureParameterSetLength
+                offset += 2;
+
+                if (_len === 0) {
+                    continue;
+                }
+
+                // pps is useless for extracting video information
+                offset += _len;
+            }
+
+            meta.avcc = new Uint8Array(dataSize);
+            meta.avcc.set(new Uint8Array(arrayBuffer, dataOffset, dataSize), 0);
+            _logger2.default.v(this.TAG, 'Parsed AVCDecoderConfigurationRecord');
+
+            if (this._isInitialMetadataDispatched()) {
+                // flush parsed frames
+                if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
+                    this._onDataAvailable(this._audioTrack, this._videoTrack);
+                }
+            } else {
+                this._videoInitialMetadataDispatched = true;
+            }
+            // notify new metadata
+            this._dispatch = false;
+            this._onTrackMetadata('video', meta);
+        }
+    }, {
+        key: '_parseAVCVideoData',
+        value: function _parseAVCVideoData(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition, frameType, cts) {
+            var le = this._littleEndian;
+            var v = new DataView(arrayBuffer, dataOffset, dataSize);
+
+            var units = [],
+                length = 0;
+
+            var offset = 0;
+            var lengthSize = this._naluLengthSize;
+            var dts = this._timestampBase + tagTimestamp;
+            var keyframe = frameType === 1; // from FLV Frame Type constants
+
+            while (offset < dataSize) {
+                if (offset + 4 >= dataSize) {
+                    _logger2.default.w(this.TAG, 'Malformed Nalu near timestamp ' + dts + ', offset = ' + offset + ', dataSize = ' + dataSize);
+                    break; // data not enough for next Nalu
+                }
+                // Nalu with length-header (AVC1)
+                var naluSize = v.getUint32(offset, !le); // Big-Endian read
+                if (lengthSize === 3) {
+                    naluSize >>>= 8;
+                }
+                if (naluSize > dataSize - lengthSize) {
+                    _logger2.default.w(this.TAG, 'Malformed Nalus near timestamp ' + dts + ', NaluSize > DataSize!');
+                    return;
+                }
+
+                var unitType = v.getUint8(offset + lengthSize) & 0x1F;
+
+                if (unitType === 5) {
+                    // IDR
+                    keyframe = true;
+                }
+
+                var data = new Uint8Array(arrayBuffer, dataOffset + offset, lengthSize + naluSize);
+                var unit = { type: unitType, data: data };
+                units.push(unit);
+                length += data.byteLength;
+
+                offset += lengthSize + naluSize;
+            }
+
+            if (units.length) {
+                var track = this._videoTrack;
+                var avcSample = {
+                    units: units,
+                    length: length,
+                    isKeyframe: keyframe,
+                    dts: dts,
+                    cts: cts,
+                    pts: dts + cts
+                };
+                if (keyframe) {
+                    avcSample.fileposition = tagPosition;
+                }
+                track.samples.push(avcSample);
+                track.length += length;
+            }
+        }
+    }, {
+        key: 'onTrackMetadata',
+        get: function get() {
+            return this._onTrackMetadata;
+        },
+        set: function set(callback) {
+            this._onTrackMetadata = callback;
         }
 
-        var dataOffset = offset + 11;
+        // prototype: function(mediaInfo: MediaInfo): void
 
-        switch (tagType) {
-          case 8:
-            // Audio
-            this._parseAudioData(chunk, dataOffset, dataSize, timestamp);
-            break;
-          case 9:
-            // Video
-            this._parseVideoData(chunk, dataOffset, dataSize, timestamp, byteStart + offset);
-            break;
-          case 18:
-            // ScriptDataObject
-            this._parseScriptData(chunk, dataOffset, dataSize);
-            break;
+    }, {
+        key: 'onMediaInfo',
+        get: function get() {
+            return this._onMediaInfo;
+        },
+        set: function set(callback) {
+            this._onMediaInfo = callback;
+        }
+    }, {
+        key: 'onMetaDataArrived',
+        get: function get() {
+            return this._onMetaDataArrived;
+        },
+        set: function set(callback) {
+            this._onMetaDataArrived = callback;
+        }
+    }, {
+        key: 'onScriptDataArrived',
+        get: function get() {
+            return this._onScriptDataArrived;
+        },
+        set: function set(callback) {
+            this._onScriptDataArrived = callback;
         }
 
-        var prevTagSize = _v.getUint32(11 + dataSize, !le);
-        if (prevTagSize !== 11 + dataSize) {
-          _logger2.default.w(this.TAG, 'Invalid PrevTagSize ' + prevTagSize);
+        // prototype: function(type: number, info: string): void
+
+    }, {
+        key: 'onError',
+        get: function get() {
+            return this._onError;
+        },
+        set: function set(callback) {
+            this._onError = callback;
         }
 
-        offset += 11 + dataSize + 4; // tagBody + dataSize + prevTagSize
-      }
+        // prototype: function(videoTrack: any, audioTrack: any): void
 
-      // dispatch parsed frames to consumer (typically, the remuxer)
-      if (this._isInitialMetadataDispatched()) {
-        if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
-          this._onDataAvailable(this._audioTrack, this._videoTrack);
+    }, {
+        key: 'onDataAvailable',
+        get: function get() {
+            return this._onDataAvailable;
+        },
+        set: function set(callback) {
+            this._onDataAvailable = callback;
         }
-      }
 
-      return offset; // consumed bytes, just equals latest offset index
-    }
-  }, {
-    key: '_parseScriptData',
-    value: function _parseScriptData(arrayBuffer, dataOffset, dataSize) {
-      var scriptData = _amfParser2.default.parseScriptData(arrayBuffer, dataOffset, dataSize);
+        // timestamp base for output samples, must be in milliseconds
 
-      if (scriptData.hasOwnProperty('onMetaData')) {
-        if (scriptData.onMetaData == null || _typeof(scriptData.onMetaData) !== 'object') {
-          _logger2.default.w(this.TAG, 'Invalid onMetaData structure!');
-          return;
+    }, {
+        key: 'timestampBase',
+        get: function get() {
+            return this._timestampBase;
+        },
+        set: function set(base) {
+            this._timestampBase = base;
         }
-        if (this._metadata) {
-          _logger2.default.w(this.TAG, 'Found another onMetaData tag!');
+    }, {
+        key: 'overridedDuration',
+        get: function get() {
+            return this._duration;
         }
-        this._metadata = scriptData;
-        var onMetaData = this._metadata.onMetaData;
-        this._emitter.emit('metadata_arrived', onMetaData);
 
-        if (typeof onMetaData.hasAudio === 'boolean') {
-          // hasAudio
-          if (this._hasAudioFlagOverrided === false) {
-            this._hasAudio = onMetaData.hasAudio;
-            this._mediaInfo.hasAudio = this._hasAudio;
-          }
-        }
-        if (typeof onMetaData.hasVideo === 'boolean') {
-          // hasVideo
-          if (this._hasVideoFlagOverrided === false) {
-            this._hasVideo = onMetaData.hasVideo;
-            this._mediaInfo.hasVideo = this._hasVideo;
-          }
-        }
-        if (typeof onMetaData.audiodatarate === 'number') {
-          // audiodatarate
-          this._mediaInfo.audioDataRate = onMetaData.audiodatarate;
-        }
-        if (typeof onMetaData.videodatarate === 'number') {
-          // videodatarate
-          this._mediaInfo.videoDataRate = onMetaData.videodatarate;
-        }
-        if (typeof onMetaData.width === 'number') {
-          // width
-          this._mediaInfo.width = onMetaData.width;
-        }
-        if (typeof onMetaData.height === 'number') {
-          // height
-          this._mediaInfo.height = onMetaData.height;
-        }
-        if (typeof onMetaData.duration === 'number') {
-          // duration
-          if (!this._durationOverrided) {
-            var duration = Math.floor(onMetaData.duration * this._timescale);
+        // Force-override media duration. Must be in milliseconds, int32
+        ,
+        set: function set(duration) {
+            this._durationOverrided = true;
             this._duration = duration;
             this._mediaInfo.duration = duration;
-          }
-        } else {
-          this._mediaInfo.duration = 0;
-        }
-        if (typeof onMetaData.framerate === 'number') {
-          // framerate
-          var fps_num = Math.floor(onMetaData.framerate * 1000);
-          if (fps_num > 0) {
-            var fps = fps_num / 1000;
-            this._referenceFrameRate.fixed = true;
-            this._referenceFrameRate.fps = fps;
-            this._referenceFrameRate.fps_num = fps_num;
-            this._referenceFrameRate.fps_den = 1000;
-            this._mediaInfo.fps = fps;
-          }
-        }
-        if (_typeof(onMetaData.keyframes) === 'object') {
-          // keyframes
-          this._mediaInfo.hasKeyframesIndex = true;
-          var keyframes = onMetaData.keyframes;
-          this._mediaInfo.keyframesIndex = this._parseKeyframesIndex(keyframes);
-          onMetaData.keyframes = null; // keyframes has been extracted, remove it
-        } else {
-          this._mediaInfo.hasKeyframesIndex = false;
-        }
-        this._dispatch = false;
-        this._mediaInfo.metadata = onMetaData;
-        _logger2.default.v(this.TAG, 'Parsed onMetaData');
-        if (this._mediaInfo.isComplete()) {
-          this._onMediaInfo(this._mediaInfo);
-        }
-      }
-    }
-  }, {
-    key: '_parseKeyframesIndex',
-    value: function _parseKeyframesIndex(keyframes) {
-      var times = [];
-      var filepositions = [];
-
-      // ignore first keyframe which is actually AVC Sequence Header (AVCDecoderConfigurationRecord)
-      for (var i = 1; i < keyframes.times.length; i++) {
-        var time = this._timestampBase + Math.floor(keyframes.times[i] * 1000);
-        times.push(time);
-        filepositions.push(keyframes.filepositions[i]);
-      }
-
-      return {
-        times: times,
-        filepositions: filepositions
-      };
-    }
-  }, {
-    key: '_parseAudioData',
-    value: function _parseAudioData(arrayBuffer, dataOffset, dataSize, tagTimestamp) {
-      if (dataSize <= 1) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid audio packet, missing SoundData payload!');
-        return;
-      }
-
-      if (this._hasAudioFlagOverrided === true && this._hasAudio === false) {
-        // If hasAudio: false indicated explicitly in MediaDataSource,
-        // Ignore all the audio packets
-        return;
-      }
-
-      var le = this._littleEndian;
-      var v = new DataView(arrayBuffer, dataOffset, dataSize);
-
-      var soundSpec = v.getUint8(0);
-
-      var soundFormat = soundSpec >>> 4;
-      if (soundFormat !== 2 && soundFormat !== 10) {
-        // MP3 or AAC
-        this._onError(_demuxErrors2.default.CODEC_UNSUPPORTED, 'Flv: Unsupported audio codec idx: ' + soundFormat);
-        return;
-      }
-
-      var soundRate = 0;
-      var soundRateIndex = (soundSpec & 12) >>> 2;
-      if (soundRateIndex >= 0 && soundRateIndex <= 4) {
-        soundRate = this._flvSoundRateTable[soundRateIndex];
-      } else {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid audio sample rate idx: ' + soundRateIndex);
-        return;
-      }
-
-      var soundSize = (soundSpec & 2) >>> 1; // unused
-      var soundType = soundSpec & 1;
-
-      var meta = this._audioMetadata;
-      var track = this._audioTrack;
-
-      if (!meta) {
-        if (this._hasAudio === false && this._hasAudioFlagOverrided === false) {
-          this._hasAudio = true;
-          this._mediaInfo.hasAudio = true;
         }
 
-        // initial metadata
-        meta = this._audioMetadata = {};
-        meta.type = 'audio';
-        meta.id = track.id;
-        meta.timescale = this._timescale;
-        meta.duration = this._duration;
-        meta.audioSampleRate = soundRate;
-        meta.channelCount = soundType === 0 ? 1 : 2;
-      }
+        // Force-override audio track present flag, boolean
 
-      if (soundFormat === 10) {
-        // AAC
-        var aacData = this._parseAACAudioData(arrayBuffer, dataOffset + 1, dataSize - 1);
-        if (aacData == undefined) {
-          return;
+    }, {
+        key: 'overridedHasAudio',
+        set: function set(hasAudio) {
+            this._hasAudioFlagOverrided = true;
+            this._hasAudio = hasAudio;
+            this._mediaInfo.hasAudio = hasAudio;
         }
 
-        if (aacData.packetType === 0) {
-          // AAC sequence header (AudioSpecificConfig)
-          if (meta.config) {
-            _logger2.default.w(this.TAG, 'Found another AudioSpecificConfig!');
-          }
-          var misc = aacData.data;
-          meta.audioSampleRate = misc.samplingRate;
-          meta.channelCount = misc.channelCount;
-          meta.codec = misc.codec;
-          meta.originalCodec = misc.originalCodec;
-          meta.config = misc.config;
-          // The decode result of an aac sample is 1024 PCM samples
-          meta.refSampleDuration = 1024 / meta.audioSampleRate * meta.timescale;
-          _logger2.default.v(this.TAG, 'Parsed AudioSpecificConfig');
+        // Force-override video track present flag, boolean
 
-          if (this._isInitialMetadataDispatched()) {
-            // Non-initial metadata, force dispatch (or flush) parsed frames to remuxer
-            if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
-              this._onDataAvailable(this._audioTrack, this._videoTrack);
+    }, {
+        key: 'overridedHasVideo',
+        set: function set(hasVideo) {
+            this._hasVideoFlagOverrided = true;
+            this._hasVideo = hasVideo;
+            this._mediaInfo.hasVideo = hasVideo;
+        }
+    }], [{
+        key: 'probe',
+        value: function probe(buffer) {
+            var data = new Uint8Array(buffer);
+            var mismatch = { match: false };
+
+            if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
+                return mismatch;
             }
-          } else {
-            this._audioInitialMetadataDispatched = true;
-          }
-          // then notify new metadata
-          this._dispatch = false;
-          this._onTrackMetadata('audio', meta);
 
-          var mi = this._mediaInfo;
-          mi.audioCodec = meta.originalCodec;
-          mi.audioSampleRate = meta.audioSampleRate;
-          mi.audioChannelCount = meta.channelCount;
-          if (mi.hasVideo) {
-            if (mi.videoCodec != null) {
-              mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + ',' + mi.audioCodec + '"';
+            var hasAudio = (data[4] & 4) >>> 2 !== 0;
+            var hasVideo = (data[4] & 1) !== 0;
+
+            var offset = ReadBig32(data, 5);
+
+            if (offset < 9) {
+                return mismatch;
             }
-          } else {
-            mi.mimeType = 'video/x-flv; codecs="' + mi.audioCodec + '"';
-          }
-          if (mi.isComplete()) {
-            this._onMediaInfo(mi);
-          }
-        } else if (aacData.packetType === 1) {
-          // AAC raw frame data
-          var dts = this._timestampBase + tagTimestamp;
-          var aacSample = { unit: aacData.data, length: aacData.data.byteLength, dts: dts, pts: dts };
-          track.samples.push(aacSample);
-          track.length += aacData.data.length;
-        } else {
-          _logger2.default.e(this.TAG, 'Flv: Unsupported AAC data type ' + aacData.packetType);
+
+            return {
+                match: true,
+                consumed: offset,
+                dataOffset: offset,
+                hasAudioTrack: hasAudio,
+                hasVideoTrack: hasVideo
+            };
         }
-      } else if (soundFormat === 2) {
-        // MP3
-        if (!meta.codec) {
-          // We need metadata for mp3 audio track, extract info from frame header
-          var _misc = this._parseMP3AudioData(arrayBuffer, dataOffset + 1, dataSize - 1, true);
-          if (_misc == undefined) {
-            return;
-          }
-          meta.audioSampleRate = _misc.samplingRate;
-          meta.channelCount = _misc.channelCount;
-          meta.codec = _misc.codec;
-          meta.originalCodec = _misc.originalCodec;
-          // The decode result of an mp3 sample is 1152 PCM samples
-          meta.refSampleDuration = 1152 / meta.audioSampleRate * meta.timescale;
-          _logger2.default.v(this.TAG, 'Parsed MPEG Audio Frame Header');
+    }]);
 
-          this._audioInitialMetadataDispatched = true;
-          this._onTrackMetadata('audio', meta);
-
-          var _mi = this._mediaInfo;
-          _mi.audioCodec = meta.codec;
-          _mi.audioSampleRate = meta.audioSampleRate;
-          _mi.audioChannelCount = meta.channelCount;
-          _mi.audioDataRate = _misc.bitRate;
-          if (_mi.hasVideo) {
-            if (_mi.videoCodec != null) {
-              _mi.mimeType = 'video/x-flv; codecs="' + _mi.videoCodec + ',' + _mi.audioCodec + '"';
-            }
-          } else {
-            _mi.mimeType = 'video/x-flv; codecs="' + _mi.audioCodec + '"';
-          }
-          if (_mi.isComplete()) {
-            this._onMediaInfo(_mi);
-          }
-        }
-
-        // This packet is always a valid audio packet, extract it
-        var data = this._parseMP3AudioData(arrayBuffer, dataOffset + 1, dataSize - 1, false);
-        if (data == undefined) {
-          return;
-        }
-        var _dts = this._timestampBase + tagTimestamp;
-        var mp3Sample = { unit: data, length: data.byteLength, dts: _dts, pts: _dts };
-        track.samples.push(mp3Sample);
-        track.length += data.length;
-      }
-    }
-  }, {
-    key: '_parseAACAudioData',
-    value: function _parseAACAudioData(arrayBuffer, dataOffset, dataSize) {
-      if (dataSize <= 1) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid AAC packet, missing AACPacketType or/and Data!');
-        return;
-      }
-
-      var result = {};
-      var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
-
-      result.packetType = array[0];
-
-      if (array[0] === 0) {
-        result.data = this._parseAACAudioSpecificConfig(arrayBuffer, dataOffset + 1, dataSize - 1);
-      } else {
-        result.data = array.subarray(1);
-      }
-
-      return result;
-    }
-  }, {
-    key: '_parseAACAudioSpecificConfig',
-    value: function _parseAACAudioSpecificConfig(arrayBuffer, dataOffset, dataSize) {
-      var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
-      var config = null;
-
-      /* Audio Object Type:
-         0: Null
-         1: AAC Main
-         2: AAC LC
-         3: AAC SSR (Scalable Sample Rate)
-         4: AAC LTP (Long Term Prediction)
-         5: HE-AAC / SBR (Spectral Band Replication)
-         6: AAC Scalable
-      */
-
-      var audioObjectType = 0;
-      var originalAudioObjectType = 0;
-      var audioExtensionObjectType = null;
-      var samplingIndex = 0;
-      var extensionSamplingIndex = null;
-
-      // 5 bits
-      audioObjectType = originalAudioObjectType = array[0] >>> 3;
-      // 4 bits
-      samplingIndex = (array[0] & 0x07) << 1 | array[1] >>> 7;
-      if (samplingIndex < 0 || samplingIndex >= this._mpegSamplingRates.length) {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: AAC invalid sampling frequency index!');
-        return;
-      }
-
-      var samplingFrequence = this._mpegSamplingRates[samplingIndex];
-
-      // 4 bits
-      var channelConfig = (array[1] & 0x78) >>> 3;
-      if (channelConfig < 0 || channelConfig >= 8) {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: AAC invalid channel configuration');
-        return;
-      }
-
-      if (audioObjectType === 5) {
-        // HE-AAC?
-        // 4 bits
-        extensionSamplingIndex = (array[1] & 0x07) << 1 | array[2] >>> 7;
-        // 5 bits
-        audioExtensionObjectType = (array[2] & 0x7C) >>> 2;
-      }
-
-      // workarounds for various browsers
-      var userAgent = self.navigator.userAgent.toLowerCase();
-
-      if (userAgent.indexOf('firefox') !== -1) {
-        // firefox: use SBR (HE-AAC) if freq less than 24kHz
-        if (samplingIndex >= 6) {
-          audioObjectType = 5;
-          config = new Array(4);
-          extensionSamplingIndex = samplingIndex - 3;
-        } else {
-          // use LC-AAC
-          audioObjectType = 2;
-          config = new Array(2);
-          extensionSamplingIndex = samplingIndex;
-        }
-      } else if (userAgent.indexOf('android') !== -1) {
-        // android: always use LC-AAC
-        audioObjectType = 2;
-        config = new Array(2);
-        extensionSamplingIndex = samplingIndex;
-      } else {
-        // for other browsers, e.g. chrome...
-        // Always use HE-AAC to make it easier to switch aac codec profile
-        audioObjectType = 5;
-        extensionSamplingIndex = samplingIndex;
-        config = new Array(4);
-
-        if (samplingIndex >= 6) {
-          extensionSamplingIndex = samplingIndex - 3;
-        } else if (channelConfig === 1) {
-          // Mono channel
-          audioObjectType = 2;
-          config = new Array(2);
-          extensionSamplingIndex = samplingIndex;
-        }
-      }
-
-      config[0] = audioObjectType << 3;
-      config[0] |= (samplingIndex & 0x0F) >>> 1;
-      config[1] = (samplingIndex & 0x0F) << 7;
-      config[1] |= (channelConfig & 0x0F) << 3;
-      if (audioObjectType === 5) {
-        config[1] |= (extensionSamplingIndex & 0x0F) >>> 1;
-        config[2] = (extensionSamplingIndex & 0x01) << 7;
-        // extended audio object type: force to 2 (LC-AAC)
-        config[2] |= 2 << 2;
-        config[3] = 0;
-      }
-
-      return {
-        config: config,
-        samplingRate: samplingFrequence,
-        channelCount: channelConfig,
-        codec: 'mp4a.40.' + audioObjectType,
-        originalCodec: 'mp4a.40.' + originalAudioObjectType
-      };
-    }
-  }, {
-    key: '_parseMP3AudioData',
-    value: function _parseMP3AudioData(arrayBuffer, dataOffset, dataSize, requestHeader) {
-      if (dataSize < 4) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid MP3 packet, header missing!');
-        return;
-      }
-
-      var le = this._littleEndian;
-      var array = new Uint8Array(arrayBuffer, dataOffset, dataSize);
-      var result = null;
-
-      if (requestHeader) {
-        if (array[0] !== 0xFF) {
-          return;
-        }
-        var ver = array[1] >>> 3 & 0x03;
-        var layer = (array[1] & 0x06) >> 1;
-
-        var bitrate_index = (array[2] & 0xF0) >>> 4;
-        var sampling_freq_index = (array[2] & 0x0C) >>> 2;
-
-        var channel_mode = array[3] >>> 6 & 0x03;
-        var channel_count = channel_mode !== 3 ? 2 : 1;
-
-        var sample_rate = 0;
-        var bit_rate = 0;
-        var object_type = 34; // Layer-3, listed in MPEG-4 Audio Object Types
-
-        var codec = 'mp3';
-
-        switch (ver) {
-          case 0:
-            // MPEG 2.5
-            sample_rate = this._mpegAudioV25SampleRateTable[sampling_freq_index];
-            break;
-          case 2:
-            // MPEG 2
-            sample_rate = this._mpegAudioV20SampleRateTable[sampling_freq_index];
-            break;
-          case 3:
-            // MPEG 1
-            sample_rate = this._mpegAudioV10SampleRateTable[sampling_freq_index];
-            break;
-        }
-
-        switch (layer) {
-          case 1:
-            // Layer 3
-            object_type = 34;
-            if (bitrate_index < this._mpegAudioL3BitRateTable.length) {
-              bit_rate = this._mpegAudioL3BitRateTable[bitrate_index];
-            }
-            break;
-          case 2:
-            // Layer 2
-            object_type = 33;
-            if (bitrate_index < this._mpegAudioL2BitRateTable.length) {
-              bit_rate = this._mpegAudioL2BitRateTable[bitrate_index];
-            }
-            break;
-          case 3:
-            // Layer 1
-            object_type = 32;
-            if (bitrate_index < this._mpegAudioL1BitRateTable.length) {
-              bit_rate = this._mpegAudioL1BitRateTable[bitrate_index];
-            }
-            break;
-        }
-
-        result = {
-          bitRate: bit_rate,
-          samplingRate: sample_rate,
-          channelCount: channel_count,
-          codec: codec,
-          originalCodec: codec
-        };
-      } else {
-        result = array;
-      }
-
-      return result;
-    }
-  }, {
-    key: '_parseVideoData',
-    value: function _parseVideoData(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition) {
-      if (dataSize <= 1) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid video packet, missing VideoData payload!');
-        return;
-      }
-
-      if (this._hasVideoFlagOverrided === true && this._hasVideo === false) {
-        // If hasVideo: false indicated explicitly in MediaDataSource,
-        // Ignore all the video packets
-        return;
-      }
-
-      var spec = new Uint8Array(arrayBuffer, dataOffset, dataSize)[0];
-
-      var frameType = (spec & 240) >>> 4;
-      var codecId = spec & 15;
-
-      if (codecId !== 7) {
-        this._onError(_demuxErrors2.default.CODEC_UNSUPPORTED, 'Flv: Unsupported codec in video frame: ' + codecId);
-        return;
-      }
-
-      this._parseAVCVideoPacket(arrayBuffer, dataOffset + 1, dataSize - 1, tagTimestamp, tagPosition, frameType);
-    }
-  }, {
-    key: '_parseAVCVideoPacket',
-    value: function _parseAVCVideoPacket(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition, frameType) {
-      if (dataSize < 4) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid AVC packet, missing AVCPacketType or/and CompositionTime');
-        return;
-      }
-
-      var le = this._littleEndian;
-      var v = new DataView(arrayBuffer, dataOffset, dataSize);
-
-      var packetType = v.getUint8(0);
-      var cts_unsigned = v.getUint32(0, !le) & 0x00FFFFFF;
-      var cts = cts_unsigned << 8 >> 8; // convert to 24-bit signed int
-
-      if (packetType === 0) {
-        // AVCDecoderConfigurationRecord
-        this._parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset + 4, dataSize - 4);
-      } else if (packetType === 1) {
-        // One or more Nalus
-        this._parseAVCVideoData(arrayBuffer, dataOffset + 4, dataSize - 4, tagTimestamp, tagPosition, frameType, cts);
-      } else if (packetType === 2) {
-        // empty, AVC end of sequence
-      } else {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid video packet type ' + packetType);
-        return;
-      }
-    }
-  }, {
-    key: '_parseAVCDecoderConfigurationRecord',
-    value: function _parseAVCDecoderConfigurationRecord(arrayBuffer, dataOffset, dataSize) {
-      if (dataSize < 7) {
-        _logger2.default.w(this.TAG, 'Flv: Invalid AVCDecoderConfigurationRecord, lack of data!');
-        return;
-      }
-
-      var meta = this._videoMetadata;
-      var track = this._videoTrack;
-      var le = this._littleEndian;
-      var v = new DataView(arrayBuffer, dataOffset, dataSize);
-
-      if (!meta) {
-        if (this._hasVideo === false && this._hasVideoFlagOverrided === false) {
-          this._hasVideo = true;
-          this._mediaInfo.hasVideo = true;
-        }
-
-        meta = this._videoMetadata = {};
-        meta.type = 'video';
-        meta.id = track.id;
-        meta.timescale = this._timescale;
-        meta.duration = this._duration;
-      } else {
-        if (typeof meta.avcc !== 'undefined') {
-          _logger2.default.w(this.TAG, 'Found another AVCDecoderConfigurationRecord!');
-        }
-      }
-
-      var version = v.getUint8(0); // configurationVersion
-      var avcProfile = v.getUint8(1); // avcProfileIndication
-      var profileCompatibility = v.getUint8(2); // profile_compatibility
-      var avcLevel = v.getUint8(3); // AVCLevelIndication
-
-      if (version !== 1 || avcProfile === 0) {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord');
-        return;
-      }
-
-      this._naluLengthSize = (v.getUint8(4) & 3) + 1; // lengthSizeMinusOne
-      if (this._naluLengthSize !== 3 && this._naluLengthSize !== 4) {
-        // holy shit!!!
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Strange NaluLengthSizeMinusOne: ' + (this._naluLengthSize - 1));
-        return;
-      }
-
-      var spsCount = v.getUint8(5) & 31; // numOfSequenceParameterSets
-      if (spsCount === 0) {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord: No SPS');
-        return;
-      } else if (spsCount > 1) {
-        _logger2.default.w(this.TAG, 'Flv: Strange AVCDecoderConfigurationRecord: SPS Count = ' + spsCount);
-      }
-
-      var offset = 6;
-
-      for (var i = 0; i < spsCount; i++) {
-        var len = v.getUint16(offset, !le); // sequenceParameterSetLength
-        offset += 2;
-
-        if (len === 0) {
-          continue;
-        }
-
-        // Notice: Nalu without startcode header (00 00 00 01)
-        var sps = new Uint8Array(arrayBuffer, dataOffset + offset, len);
-        offset += len;
-
-        var config = _spsParser2.default.parseSPS(sps);
-        if (i !== 0) {
-          // ignore other sps's config
-          continue;
-        }
-
-        meta.codecWidth = config.codec_size.width;
-        meta.codecHeight = config.codec_size.height;
-        meta.presentWidth = config.present_size.width;
-        meta.presentHeight = config.present_size.height;
-
-        meta.profile = config.profile_string;
-        meta.level = config.level_string;
-        meta.bitDepth = config.bit_depth;
-        meta.chromaFormat = config.chroma_format;
-        meta.sarRatio = config.par_ratio;
-        meta.frameRate = config.frame_rate;
-
-        if (config.frame_rate.fixed === false || config.frame_rate.fps_num === 0 || config.frame_rate.fps_den === 0) {
-          meta.frameRate = this._referenceFrameRate;
-        }
-
-        var fps_den = meta.frameRate.fps_den;
-        var fps_num = meta.frameRate.fps_num;
-        meta.refSampleDuration = meta.timescale * (fps_den / fps_num);
-
-        var codecArray = sps.subarray(1, 4);
-        var codecString = 'avc1.';
-        for (var j = 0; j < 3; j++) {
-          var h = codecArray[j].toString(16);
-          if (h.length < 2) {
-            h = '0' + h;
-          }
-          codecString += h;
-        }
-        meta.codec = codecString;
-
-        var mi = this._mediaInfo;
-        mi.width = meta.codecWidth;
-        mi.height = meta.codecHeight;
-        mi.fps = meta.frameRate.fps;
-        mi.profile = meta.profile;
-        mi.level = meta.level;
-        mi.refFrames = config.ref_frames;
-        mi.chromaFormat = config.chroma_format_string;
-        mi.sarNum = meta.sarRatio.width;
-        mi.sarDen = meta.sarRatio.height;
-        mi.videoCodec = codecString;
-
-        if (mi.hasAudio) {
-          if (mi.audioCodec != null) {
-            mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + ',' + mi.audioCodec + '"';
-          }
-        } else {
-          mi.mimeType = 'video/x-flv; codecs="' + mi.videoCodec + '"';
-        }
-        if (mi.isComplete()) {
-          this._onMediaInfo(mi);
-        }
-      }
-
-      var ppsCount = v.getUint8(offset); // numOfPictureParameterSets
-      if (ppsCount === 0) {
-        this._onError(_demuxErrors2.default.FORMAT_ERROR, 'Flv: Invalid AVCDecoderConfigurationRecord: No PPS');
-        return;
-      } else if (ppsCount > 1) {
-        _logger2.default.w(this.TAG, 'Flv: Strange AVCDecoderConfigurationRecord: PPS Count = ' + ppsCount);
-      }
-
-      offset++;
-
-      for (var _i = 0; _i < ppsCount; _i++) {
-        var _len = v.getUint16(offset, !le); // pictureParameterSetLength
-        offset += 2;
-
-        if (_len === 0) {
-          continue;
-        }
-
-        // pps is useless for extracting video information
-        offset += _len;
-      }
-
-      meta.avcc = new Uint8Array(dataSize);
-      meta.avcc.set(new Uint8Array(arrayBuffer, dataOffset, dataSize), 0);
-      _logger2.default.v(this.TAG, 'Parsed AVCDecoderConfigurationRecord');
-
-      if (this._isInitialMetadataDispatched()) {
-        // flush parsed frames
-        if (this._dispatch && (this._audioTrack.length || this._videoTrack.length)) {
-          this._onDataAvailable(this._audioTrack, this._videoTrack);
-        }
-      } else {
-        this._videoInitialMetadataDispatched = true;
-      }
-      // notify new metadata
-      this._dispatch = false;
-      this._onTrackMetadata('video', meta);
-    }
-  }, {
-    key: '_parseAVCVideoData',
-    value: function _parseAVCVideoData(arrayBuffer, dataOffset, dataSize, tagTimestamp, tagPosition, frameType, cts) {
-      var le = this._littleEndian;
-      var v = new DataView(arrayBuffer, dataOffset, dataSize);
-
-      var units = [],
-          length = 0;
-
-      var offset = 0;
-      var lengthSize = this._naluLengthSize;
-      var dts = this._timestampBase + tagTimestamp;
-      var keyframe = frameType === 1; // from FLV Frame Type constants
-
-      while (offset < dataSize) {
-        if (offset + 4 >= dataSize) {
-          _logger2.default.w(this.TAG, 'Malformed Nalu near timestamp ' + dts + ', offset = ' + offset + ', dataSize = ' + dataSize);
-          break; // data not enough for next Nalu
-        }
-        // Nalu with length-header (AVC1)
-        var naluSize = v.getUint32(offset, !le); // Big-Endian read
-        if (lengthSize === 3) {
-          naluSize >>>= 8;
-        }
-        if (naluSize > dataSize - lengthSize) {
-          _logger2.default.w(this.TAG, 'Malformed Nalus near timestamp ' + dts + ', NaluSize > DataSize!');
-          return;
-        }
-
-        var unitType = v.getUint8(offset + lengthSize) & 0x1F;
-
-        if (unitType === 5) {
-          // IDR
-          keyframe = true;
-        }
-
-        var data = new Uint8Array(arrayBuffer, dataOffset + offset, lengthSize + naluSize);
-        var unit = { type: unitType, data: data };
-        units.push(unit);
-        length += data.byteLength;
-
-        offset += lengthSize + naluSize;
-      }
-
-      if (units.length) {
-        var track = this._videoTrack;
-        var avcSample = {
-          units: units,
-          length: length,
-          isKeyframe: keyframe,
-          dts: dts,
-          cts: cts,
-          pts: dts + cts
-        };
-        if (keyframe) {
-          avcSample.fileposition = tagPosition;
-        }
-        track.samples.push(avcSample);
-        track.length += length;
-      }
-    }
-  }, {
-    key: 'onTrackMetadata',
-    get: function get() {
-      return this._onTrackMetadata;
-    },
-    set: function set(callback) {
-      this._onTrackMetadata = callback;
-    }
-
-    // prototype: function(mediaInfo: MediaInfo): void
-
-  }, {
-    key: 'onMediaInfo',
-    get: function get() {
-      return this._onMediaInfo;
-    },
-    set: function set(callback) {
-      this._onMediaInfo = callback;
-    }
-
-    // prototype: function(type: number, info: string): void
-
-  }, {
-    key: 'onError',
-    get: function get() {
-      return this._onError;
-    },
-    set: function set(callback) {
-      this._onError = callback;
-    }
-
-    // prototype: function(videoTrack: any, audioTrack: any): void
-
-  }, {
-    key: 'onDataAvailable',
-    get: function get() {
-      return this._onDataAvailable;
-    },
-    set: function set(callback) {
-      this._onDataAvailable = callback;
-    }
-
-    // timestamp base for output samples, must be in milliseconds
-
-  }, {
-    key: 'timestampBase',
-    get: function get() {
-      return this._timestampBase;
-    },
-    set: function set(base) {
-      this._timestampBase = base;
-    }
-  }, {
-    key: 'overridedDuration',
-    get: function get() {
-      return this._duration;
-    }
-
-    // Force-override media duration. Must be in milliseconds, int32
-    ,
-    set: function set(duration) {
-      this._durationOverrided = true;
-      this._duration = duration;
-      this._mediaInfo.duration = duration;
-    }
-
-    // Force-override audio track present flag, boolean
-
-  }, {
-    key: 'overridedHasAudio',
-    set: function set(hasAudio) {
-      this._hasAudioFlagOverrided = true;
-      this._hasAudio = hasAudio;
-      this._mediaInfo.hasAudio = hasAudio;
-    }
-
-    // Force-override video track present flag, boolean
-
-  }, {
-    key: 'overridedHasVideo',
-    set: function set(hasVideo) {
-      this._hasVideoFlagOverrided = true;
-      this._hasVideo = hasVideo;
-      this._mediaInfo.hasVideo = hasVideo;
-    }
-  }], [{
-    key: 'probe',
-    value: function probe(buffer) {
-      var data = new Uint8Array(buffer);
-      var mismatch = { match: false };
-
-      if (data[0] !== 0x46 || data[1] !== 0x4C || data[2] !== 0x56 || data[3] !== 0x01) {
-        return mismatch;
-      }
-
-      var hasAudio = (data[4] & 4) >>> 2 !== 0;
-      var hasVideo = (data[4] & 1) !== 0;
-
-      var offset = ReadBig32(data, 5);
-
-      if (offset < 9) {
-        return mismatch;
-      }
-
-      return {
-        match: true,
-        consumed: offset,
-        dataOffset: offset,
-        hasAudioTrack: hasAudio,
-        hasVideoTrack: hasVideo
-      };
-    }
-  }]);
-
-  return FLVDemuxer;
+    return FLVDemuxer;
 }();
 
 exports.default = FLVDemuxer;
@@ -9305,8 +9495,7 @@ var AMF = function () {
                             if ((v.getUint32(dataSize - 4, !le) & 0x00FFFFFF) === 9) {
                                 terminal = 3;
                             }
-                            var maxLoop = 10000;
-                            while (offset < dataSize - 4 && maxLoop-- > 0) {
+                            while (offset < dataSize - 4) {
                                 // 4 === type(UI8) + ScriptDataObjectEnd(UI24)
                                 var amfobj = AMF.parseObject(arrayBuffer, dataOffset + offset, dataSize - offset - terminal);
                                 if (amfobj.objectEnd) break;
@@ -9330,9 +9519,7 @@ var AMF = function () {
                             if ((v.getUint32(dataSize - 4, !le) & 0x00FFFFFF) === 9) {
                                 _terminal = 3;
                             }
-
-                            var _maxLoop = 10000;
-                            while (offset < dataSize - 8 && _maxLoop-- > 0) {
+                            while (offset < dataSize - 8) {
                                 // 8 === type(UI8) + ECMAArrayLength(UI32) + ScriptDataVariableEnd(UI24)
                                 var amfvar = AMF.parseVariable(arrayBuffer, dataOffset + offset, dataSize - offset - _terminal);
                                 if (amfvar.objectEnd) break;
@@ -9744,7 +9931,7 @@ var SPSParser = function () {
                     fps_num: fps_num
                 },
 
-                par_ratio: {
+                sar_ratio: {
                     width: sar_width,
                     height: sar_height
                 },
@@ -10330,103 +10517,92 @@ var MP4Remuxer = function () {
                 var _sample = samples[i];
                 var unit = _sample.unit;
                 var originalDts = _sample.dts - this._dtsBase;
-                var _dts = originalDts;
-                var needFillSilentFrames = false;
-                var silentFrames = null;
-                var sampleDuration = 0;
-
-                if (originalDts < -0.001) {
-                    continue; //pass the first sample with the invalid dts
-                }
-
-                if (this._audioMeta.codec !== 'mp3') {
-                    // for AAC codec, we need to keep dts increase based on refSampleDuration
-                    var curRefDts = originalDts;
-                    var maxAudioFramesDrift = 3;
-                    if (this._audioNextDts) {
-                        curRefDts = this._audioNextDts;
-                    }
-
-                    dtsCorrection = originalDts - curRefDts;
-                    if (dtsCorrection <= -maxAudioFramesDrift * refSampleDuration) {
-                        // If we're overlapping by more than maxAudioFramesDrift number of frame, drop this sample
-                        _logger2.default.w(this.TAG, 'Dropping 1 audio frame (originalDts: ' + originalDts + ' ms ,curRefDts: ' + curRefDts + ' ms)  due to dtsCorrection: ' + dtsCorrection + ' ms overlap.');
-                        continue;
-                    } else if (dtsCorrection >= maxAudioFramesDrift * refSampleDuration && this._fillAudioTimestampGap && !_browser2.default.safari) {
-                        // Silent frame generation, if large timestamp gap detected && config.fixAudioTimestampGap
-                        needFillSilentFrames = true;
-                        // We need to insert silent frames to fill timestamp gap
-                        var frameCount = Math.floor(dtsCorrection / refSampleDuration);
-                        _logger2.default.w(this.TAG, 'Large audio timestamp gap detected, may cause AV sync to drift. ' + 'Silent frames will be generated to avoid unsync.\n' + ('originalDts: ' + originalDts + ' ms, curRefDts: ' + curRefDts + ' ms, ') + ('dtsCorrection: ' + Math.round(dtsCorrection) + ' ms, generate: ' + frameCount + ' frames'));
-
-                        _dts = Math.floor(curRefDts);
-                        sampleDuration = Math.floor(curRefDts + refSampleDuration) - _dts;
-
-                        var _silentUnit = _aacSilent2.default.getSilentFrame(this._audioMeta.originalCodec, this._audioMeta.channelCount);
-                        if (_silentUnit == null) {
-                            _logger2.default.w(this.TAG, 'Unable to generate silent frame for ' + (this._audioMeta.originalCodec + ' with ' + this._audioMeta.channelCount + ' channels, repeat last frame'));
-                            // Repeat last frame
-                            _silentUnit = unit;
-                        }
-                        silentFrames = [];
-
-                        for (var j = 0; j < frameCount; j++) {
-                            curRefDts = curRefDts + refSampleDuration;
-                            var intDts = Math.floor(curRefDts); // change to integer
-                            var intDuration = Math.floor(curRefDts + refSampleDuration) - intDts;
-                            var frame = {
-                                dts: intDts,
-                                pts: intDts,
-                                cts: 0,
-                                unit: _silentUnit,
-                                size: _silentUnit.byteLength,
-                                duration: intDuration, // wait for next sample
-                                originalDts: originalDts,
-                                flags: {
-                                    isLeading: 0,
-                                    dependsOn: 1,
-                                    isDependedOn: 0,
-                                    hasRedundancy: 0
-                                }
-                            };
-                            silentFrames.push(frame);
-                            mdatBytes += unit.byteLength;
-                        }
-
-                        this._audioNextDts = curRefDts + refSampleDuration;
-                    } else {
-
-                        _dts = Math.floor(curRefDts);
-                        sampleDuration = Math.floor(curRefDts + refSampleDuration) - _dts;
-                        this._audioNextDts = curRefDts + refSampleDuration;
-                    }
-                } else {
-                    // keep the original dts calculate algorithm for mp3
-                    _dts = originalDts - dtsCorrection;
-
-                    if (i !== samples.length - 1) {
-                        var nextDts = samples[i + 1].dts - this._dtsBase - dtsCorrection;
-                        sampleDuration = nextDts - _dts;
-                    } else {
-                        // the last sample
-                        if (lastSample != null) {
-                            // use stashed sample's dts to calculate sample duration
-                            var _nextDts = lastSample.dts - this._dtsBase - dtsCorrection;
-                            sampleDuration = _nextDts - _dts;
-                        } else if (mp4Samples.length >= 1) {
-                            // use second last sample duration
-                            sampleDuration = mp4Samples[mp4Samples.length - 1].duration;
-                        } else {
-                            // the only one sample, use reference sample duration
-                            sampleDuration = Math.floor(refSampleDuration);
-                        }
-                    }
-                    this._audioNextDts = _dts + sampleDuration;
-                }
+                var _dts = originalDts - dtsCorrection;
 
                 if (firstDts === -1) {
                     firstDts = _dts;
                 }
+
+                var sampleDuration = 0;
+
+                if (i !== samples.length - 1) {
+                    var nextDts = samples[i + 1].dts - this._dtsBase - dtsCorrection;
+                    sampleDuration = nextDts - _dts;
+                } else {
+                    // the last sample
+                    if (lastSample != null) {
+                        // use stashed sample's dts to calculate sample duration
+                        var _nextDts = lastSample.dts - this._dtsBase - dtsCorrection;
+                        sampleDuration = _nextDts - _dts;
+                    } else if (mp4Samples.length >= 1) {
+                        // use second last sample duration
+                        sampleDuration = mp4Samples[mp4Samples.length - 1].duration;
+                    } else {
+                        // the only one sample, use reference sample duration
+                        sampleDuration = Math.floor(refSampleDuration);
+                    }
+                }
+
+                var needFillSilentFrames = false;
+                var silentFrames = null;
+
+                // Silent frame generation, if large timestamp gap detected && config.fixAudioTimestampGap
+                if (sampleDuration > refSampleDuration * 1.5 && this._audioMeta.codec !== 'mp3' && this._fillAudioTimestampGap && !_browser2.default.safari) {
+                    // We need to insert silent frames to fill timestamp gap
+                    needFillSilentFrames = true;
+                    var delta = Math.abs(sampleDuration - refSampleDuration);
+                    var frameCount = Math.ceil(delta / refSampleDuration);
+                    var currentDts = _dts + refSampleDuration; // Notice: in float
+
+                    _logger2.default.w(this.TAG, 'Large audio timestamp gap detected, may cause AV sync to drift. ' + 'Silent frames will be generated to avoid unsync.\n' + ('dts: ' + (_dts + sampleDuration) + ' ms, expected: ' + (_dts + Math.round(refSampleDuration)) + ' ms, ') + ('delta: ' + Math.round(delta) + ' ms, generate: ' + frameCount + ' frames'));
+
+                    var _silentUnit = _aacSilent2.default.getSilentFrame(this._audioMeta.originalCodec, this._audioMeta.channelCount);
+                    if (_silentUnit == null) {
+                        _logger2.default.w(this.TAG, 'Unable to generate silent frame for ' + (this._audioMeta.originalCodec + ' with ' + this._audioMeta.channelCount + ' channels, repeat last frame'));
+                        // Repeat last frame
+                        _silentUnit = unit;
+                    }
+                    silentFrames = [];
+
+                    for (var j = 0; j < frameCount; j++) {
+                        var intDts = Math.round(currentDts); // round to integer
+                        if (silentFrames.length > 0) {
+                            // Set previous frame sample duration
+                            var previousFrame = silentFrames[silentFrames.length - 1];
+                            previousFrame.duration = intDts - previousFrame.dts;
+                        }
+                        var frame = {
+                            dts: intDts,
+                            pts: intDts,
+                            cts: 0,
+                            unit: _silentUnit,
+                            size: _silentUnit.byteLength,
+                            duration: 0, // wait for next sample
+                            originalDts: originalDts,
+                            flags: {
+                                isLeading: 0,
+                                dependsOn: 1,
+                                isDependedOn: 0,
+                                hasRedundancy: 0
+                            }
+                        };
+                        silentFrames.push(frame);
+                        mdatBytes += frame.size;
+                        currentDts += refSampleDuration;
+                    }
+
+                    // last frame: align end time to next frame dts
+                    var lastFrame = silentFrames[silentFrames.length - 1];
+                    lastFrame.duration = _dts + sampleDuration - lastFrame.dts;
+
+                    // silentFrames.forEach((frame) => {
+                    //     Log.w(this.TAG, `SilentAudio: dts: ${frame.dts}, duration: ${frame.duration}`);
+                    // });
+
+                    // Set correct sample duration for current frame
+                    sampleDuration = Math.round(refSampleDuration);
+                }
+
                 mp4Samples.push({
                     dts: _dts,
                     pts: _dts,
@@ -10447,13 +10623,6 @@ var MP4Remuxer = function () {
                     // Silent frames should be inserted after wrong-duration frame
                     mp4Samples.push.apply(mp4Samples, silentFrames);
                 }
-            }
-
-            if (mp4Samples.length === 0) {
-                //no samples need to remux
-                track.samples = [];
-                track.length = 0;
-                return;
             }
 
             // allocate mdatbox
@@ -10481,7 +10650,7 @@ var MP4Remuxer = function () {
 
             var latest = mp4Samples[mp4Samples.length - 1];
             lastDts = latest.dts + latest.duration;
-            //this._audioNextDts = lastDts;
+            this._audioNextDts = lastDts;
 
             // fill media segment info & add to info list
             var info = new _mediaSegmentInfo.MediaSegmentInfo();
@@ -10773,7 +10942,7 @@ module.exports = exports['default'];
 
 
 Object.defineProperty(exports, "__esModule", {
-  value: true
+    value: true
 });
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -10801,520 +10970,491 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 //  MP4 boxes generator for ISO BMFF (ISO Base Media File Format, defined in ISO/IEC 14496-12)
 var MP4 = function () {
-  function MP4() {
-    _classCallCheck(this, MP4);
-  }
+    function MP4() {
+        _classCallCheck(this, MP4);
+    }
 
-  _createClass(MP4, null, [{
-    key: 'init',
-    value: function init() {
-      MP4.types = {
-        avc1: [],
-        avcC: [],
-        btrt: [],
-        dinf: [],
-        dref: [],
-        esds: [],
-        ftyp: [],
-        hdlr: [],
-        mdat: [],
-        mdhd: [],
-        mdia: [],
-        mfhd: [],
-        minf: [],
-        moof: [],
-        moov: [],
-        mp4a: [],
-        mvex: [],
-        mvhd: [],
-        sdtp: [],
-        stbl: [],
-        stco: [],
-        stsc: [],
-        stsd: [],
-        stsz: [],
-        stts: [],
-        tfdt: [],
-        tfhd: [],
-        traf: [],
-        trak: [],
-        trun: [],
-        trex: [],
-        tkhd: [],
-        vmhd: [],
-        smhd: [],
-        '.mp3': []
-      };
+    _createClass(MP4, null, [{
+        key: 'init',
+        value: function init() {
+            MP4.types = {
+                avc1: [], avcC: [], btrt: [], dinf: [],
+                dref: [], esds: [], ftyp: [], hdlr: [],
+                mdat: [], mdhd: [], mdia: [], mfhd: [],
+                minf: [], moof: [], moov: [], mp4a: [],
+                mvex: [], mvhd: [], sdtp: [], stbl: [],
+                stco: [], stsc: [], stsd: [], stsz: [],
+                stts: [], tfdt: [], tfhd: [], traf: [],
+                trak: [], trun: [], trex: [], tkhd: [],
+                vmhd: [], smhd: [], '.mp3': []
+            };
 
-      for (var name in MP4.types) {
-        if (MP4.types.hasOwnProperty(name)) {
-          MP4.types[name] = [name.charCodeAt(0), name.charCodeAt(1), name.charCodeAt(2), name.charCodeAt(3)];
+            for (var name in MP4.types) {
+                if (MP4.types.hasOwnProperty(name)) {
+                    MP4.types[name] = [name.charCodeAt(0), name.charCodeAt(1), name.charCodeAt(2), name.charCodeAt(3)];
+                }
+            }
+
+            var constants = MP4.constants = {};
+
+            constants.FTYP = new Uint8Array([0x69, 0x73, 0x6F, 0x6D, // major_brand: isom
+            0x0, 0x0, 0x0, 0x1, // minor_version: 0x01
+            0x69, 0x73, 0x6F, 0x6D, // isom
+            0x61, 0x76, 0x63, 0x31 // avc1
+            ]);
+
+            constants.STSD_PREFIX = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x01 // entry_count
+            ]);
+
+            constants.STTS = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00 // entry_count
+            ]);
+
+            constants.STSC = constants.STCO = constants.STTS;
+
+            constants.STSZ = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // sample_size
+            0x00, 0x00, 0x00, 0x00 // sample_count
+            ]);
+
+            constants.HDLR_VIDEO = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // pre_defined
+            0x76, 0x69, 0x64, 0x65, // handler_type: 'vide'
+            0x00, 0x00, 0x00, 0x00, // reserved: 3 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, 0x69, 0x64, 0x65, 0x6F, 0x48, 0x61, 0x6E, 0x64, 0x6C, 0x65, 0x72, 0x00 // name: VideoHandler
+            ]);
+
+            constants.HDLR_AUDIO = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // pre_defined
+            0x73, 0x6F, 0x75, 0x6E, // handler_type: 'soun'
+            0x00, 0x00, 0x00, 0x00, // reserved: 3 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x53, 0x6F, 0x75, 0x6E, 0x64, 0x48, 0x61, 0x6E, 0x64, 0x6C, 0x65, 0x72, 0x00 // name: SoundHandler
+            ]);
+
+            constants.DREF = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x01, // entry_count
+            0x00, 0x00, 0x00, 0x0C, // entry_size
+            0x75, 0x72, 0x6C, 0x20, // type 'url '
+            0x00, 0x00, 0x00, 0x01 // version(0) + flags
+            ]);
+
+            // Sound media header
+            constants.SMHD = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00 // balance(2) + reserved(2)
+            ]);
+
+            // video media header
+            constants.VMHD = new Uint8Array([0x00, 0x00, 0x00, 0x01, // version(0) + flags
+            0x00, 0x00, // graphicsmode: 2 bytes
+            0x00, 0x00, 0x00, 0x00, // opcolor: 3 * 2 bytes
+            0x00, 0x00]);
         }
-      }
 
-      var constants = MP4.constants = {};
+        // Generate a box
 
-      constants.FTYP = new Uint8Array([0x69, 0x73, 0x6F, 0x6D, // major_brand: isom
-      0x0, 0x0, 0x0, 0x1, // minor_version: 0x01
-      0x69, 0x73, 0x6F, 0x6D, // isom
-      0x61, 0x76, 0x63, 0x31 // avc1
-      ]);
+    }, {
+        key: 'box',
+        value: function box(type) {
+            var size = 8;
+            var result = null;
+            var datas = Array.prototype.slice.call(arguments, 1);
+            var arrayCount = datas.length;
 
-      constants.STSD_PREFIX = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x01 // entry_count
-      ]);
+            for (var i = 0; i < arrayCount; i++) {
+                size += datas[i].byteLength;
+            }
 
-      constants.STTS = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00 // entry_count
-      ]);
+            result = new Uint8Array(size);
+            result[0] = size >>> 24 & 0xFF; // size
+            result[1] = size >>> 16 & 0xFF;
+            result[2] = size >>> 8 & 0xFF;
+            result[3] = size & 0xFF;
 
-      constants.STSC = constants.STCO = constants.STTS;
+            result.set(type, 4); // type
 
-      constants.STSZ = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // sample_size
-      0x00, 0x00, 0x00, 0x00 // sample_count
-      ]);
+            var offset = 8;
+            for (var _i = 0; _i < arrayCount; _i++) {
+                // data body
+                result.set(datas[_i], offset);
+                offset += datas[_i].byteLength;
+            }
 
-      constants.HDLR_VIDEO = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // pre_defined
-      0x76, 0x69, 0x64, 0x65, // handler_type: 'vide'
-      0x00, 0x00, 0x00, 0x00, // reserved: 3 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x56, 0x69, 0x64, 0x65, 0x6F, 0x48, 0x61, 0x6E, 0x64, 0x6C, 0x65, 0x72, 0x00 // name: VideoHandler
-      ]);
-
-      constants.HDLR_AUDIO = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // pre_defined
-      0x73, 0x6F, 0x75, 0x6E, // handler_type: 'soun'
-      0x00, 0x00, 0x00, 0x00, // reserved: 3 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x53, 0x6F, 0x75, 0x6E, 0x64, 0x48, 0x61, 0x6E, 0x64, 0x6C, 0x65, 0x72, 0x00 // name: SoundHandler
-      ]);
-
-      constants.DREF = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x01, // entry_count
-      0x00, 0x00, 0x00, 0x0C, // entry_size
-      0x75, 0x72, 0x6C, 0x20, // type 'url '
-      0x00, 0x00, 0x00, 0x01 // version(0) + flags
-      ]);
-
-      // Sound media header
-      constants.SMHD = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00 // balance(2) + reserved(2)
-      ]);
-
-      // video media header
-      constants.VMHD = new Uint8Array([0x00, 0x00, 0x00, 0x01, // version(0) + flags
-      0x00, 0x00, // graphicsmode: 2 bytes
-      0x00, 0x00, 0x00, 0x00, // opcolor: 3 * 2 bytes
-      0x00, 0x00]);
-    }
-
-    // Generate a box
-
-  }, {
-    key: 'box',
-    value: function box(type) {
-      var size = 8;
-      var result = null;
-      var datas = Array.prototype.slice.call(arguments, 1);
-      var arrayCount = datas.length;
-
-      for (var i = 0; i < arrayCount; i++) {
-        size += datas[i].byteLength;
-      }
-
-      result = new Uint8Array(size);
-      result[0] = size >>> 24 & 0xFF; // size
-      result[1] = size >>> 16 & 0xFF;
-      result[2] = size >>> 8 & 0xFF;
-      result[3] = size & 0xFF;
-
-      result.set(type, 4); // type
-
-      var offset = 8;
-      for (var _i = 0; _i < arrayCount; _i++) {
-        // data body
-        result.set(datas[_i], offset);
-        offset += datas[_i].byteLength;
-      }
-
-      return result;
-    }
-
-    // emit ftyp & moov
-
-  }, {
-    key: 'generateInitSegment',
-    value: function generateInitSegment(meta) {
-      var ftyp = MP4.box(MP4.types.ftyp, MP4.constants.FTYP);
-      var moov = MP4.moov(meta);
-
-      var result = new Uint8Array(ftyp.byteLength + moov.byteLength);
-      result.set(ftyp, 0);
-      result.set(moov, ftyp.byteLength);
-      return result;
-    }
-
-    // Movie metadata box
-
-  }, {
-    key: 'moov',
-    value: function moov(meta) {
-      var mvhd = MP4.mvhd(meta.timescale, meta.duration);
-      var trak = MP4.trak(meta);
-      var mvex = MP4.mvex(meta);
-      return MP4.box(MP4.types.moov, mvhd, trak, mvex);
-    }
-
-    // Movie header box
-
-  }, {
-    key: 'mvhd',
-    value: function mvhd(timescale, duration) {
-      return MP4.box(MP4.types.mvhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // creation_time
-      0x00, 0x00, 0x00, 0x00, // modification_time
-      timescale >>> 24 & 0xFF, // timescale: 4 bytes
-      timescale >>> 16 & 0xFF, timescale >>> 8 & 0xFF, timescale & 0xFF, duration >>> 24 & 0xFF, // duration: 4 bytes
-      duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x00, 0x01, 0x00, 0x00, // Preferred rate: 1.0
-      0x01, 0x00, 0x00, 0x00, // PreferredVolume(1.0, 2bytes) + reserved(2bytes)
-      0x00, 0x00, 0x00, 0x00, // reserved: 4 + 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, // ----begin composition matrix----
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // ----end composition matrix----
-      0x00, 0x00, 0x00, 0x00, // ----begin pre_defined 6 * 4 bytes----
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ----end pre_defined 6 * 4 bytes----
-      0xFF, 0xFF, 0xFF, 0xFF // next_track_ID
-      ]));
-    }
-
-    // Track box
-
-  }, {
-    key: 'trak',
-    value: function trak(meta) {
-      return MP4.box(MP4.types.trak, MP4.tkhd(meta), MP4.mdia(meta));
-    }
-
-    // Track header box
-
-  }, {
-    key: 'tkhd',
-    value: function tkhd(meta) {
-      var trackId = meta.id,
-          duration = meta.duration;
-      var width = meta.presentWidth,
-          height = meta.presentHeight;
-
-      return MP4.box(MP4.types.tkhd, new Uint8Array([0x00, 0x00, 0x00, 0x07, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // creation_time
-      0x00, 0x00, 0x00, 0x00, // modification_time
-      trackId >>> 24 & 0xFF, // track_ID: 4 bytes
-      trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF, 0x00, 0x00, 0x00, 0x00, // reserved: 4 bytes
-      duration >>> 24 & 0xFF, // duration: 4 bytes
-      duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // layer(2bytes) + alternate_group(2bytes)
-      0x00, 0x00, 0x00, 0x00, // volume(2bytes) + reserved(2bytes)
-      0x00, 0x01, 0x00, 0x00, // ----begin composition matrix----
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // ----end composition matrix----
-      width >>> 8 & 0xFF, // width and height
-      width & 0xFF, 0x00, 0x00, height >>> 8 & 0xFF, height & 0xFF, 0x00, 0x00]));
-    }
-
-    // Media Box
-
-  }, {
-    key: 'mdia',
-    value: function mdia(meta) {
-      return MP4.box(MP4.types.mdia, MP4.mdhd(meta), MP4.hdlr(meta), MP4.minf(meta));
-    }
-
-    // Media header box
-
-  }, {
-    key: 'mdhd',
-    value: function mdhd(meta) {
-      var timescale = meta.timescale;
-      var duration = meta.duration;
-      return MP4.box(MP4.types.mdhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      0x00, 0x00, 0x00, 0x00, // creation_time
-      0x00, 0x00, 0x00, 0x00, // modification_time
-      timescale >>> 24 & 0xFF, // timescale: 4 bytes
-      timescale >>> 16 & 0xFF, timescale >>> 8 & 0xFF, timescale & 0xFF, duration >>> 24 & 0xFF, // duration: 4 bytes
-      duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x55, 0xC4, // language: und (undetermined)
-      0x00, 0x00 // pre_defined = 0
-      ]));
-    }
-
-    // Media handler reference box
-
-  }, {
-    key: 'hdlr',
-    value: function hdlr(meta) {
-      var data = null;
-      if (meta.type === 'audio') {
-        data = MP4.constants.HDLR_AUDIO;
-      } else {
-        data = MP4.constants.HDLR_VIDEO;
-      }
-      return MP4.box(MP4.types.hdlr, data);
-    }
-
-    // Media infomation box
-
-  }, {
-    key: 'minf',
-    value: function minf(meta) {
-      var xmhd = null;
-      if (meta.type === 'audio') {
-        xmhd = MP4.box(MP4.types.smhd, MP4.constants.SMHD);
-      } else {
-        xmhd = MP4.box(MP4.types.vmhd, MP4.constants.VMHD);
-      }
-      return MP4.box(MP4.types.minf, xmhd, MP4.dinf(), MP4.stbl(meta));
-    }
-
-    // Data infomation box
-
-  }, {
-    key: 'dinf',
-    value: function dinf() {
-      var result = MP4.box(MP4.types.dinf, MP4.box(MP4.types.dref, MP4.constants.DREF));
-      return result;
-    }
-
-    // Sample table box
-
-  }, {
-    key: 'stbl',
-    value: function stbl(meta) {
-      var result = MP4.box(MP4.types.stbl, // type: stbl
-      MP4.stsd(meta), // Sample Description Table
-      MP4.box(MP4.types.stts, MP4.constants.STTS), // Time-To-Sample
-      MP4.box(MP4.types.stsc, MP4.constants.STSC), // Sample-To-Chunk
-      MP4.box(MP4.types.stsz, MP4.constants.STSZ), // Sample size
-      MP4.box(MP4.types.stco, MP4.constants.STCO) // Chunk offset
-      );
-      return result;
-    }
-
-    // Sample description box
-
-  }, {
-    key: 'stsd',
-    value: function stsd(meta) {
-      if (meta.type === 'audio') {
-        if (meta.codec === 'mp3') {
-          return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp3(meta));
+            return result;
         }
-        // else: aac -> mp4a
-        return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp4a(meta));
-      } else {
-        return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.avc1(meta));
-      }
-    }
-  }, {
-    key: 'mp3',
-    value: function mp3(meta) {
-      var channelCount = meta.channelCount;
-      var sampleRate = meta.audioSampleRate;
 
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
-      0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
-      0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, channelCount, // channelCount(2)
-      0x00, 0x10, // sampleSize(2)
-      0x00, 0x00, 0x00, 0x00, // reserved(4)
-      sampleRate >>> 8 & 0xFF, // Audio sample rate
-      sampleRate & 0xFF, 0x00, 0x00]);
+        // emit ftyp & moov
 
-      return MP4.box(MP4.types['.mp3'], data);
-    }
-  }, {
-    key: 'mp4a',
-    value: function mp4a(meta) {
-      var channelCount = meta.channelCount;
-      var sampleRate = meta.audioSampleRate;
+    }, {
+        key: 'generateInitSegment',
+        value: function generateInitSegment(meta) {
+            var ftyp = MP4.box(MP4.types.ftyp, MP4.constants.FTYP);
+            var moov = MP4.moov(meta);
 
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
-      0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
-      0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, channelCount, // channelCount(2)
-      0x00, 0x10, // sampleSize(2)
-      0x00, 0x00, 0x00, 0x00, // reserved(4)
-      sampleRate >>> 8 & 0xFF, // Audio sample rate
-      sampleRate & 0xFF, 0x00, 0x00]);
+            var result = new Uint8Array(ftyp.byteLength + moov.byteLength);
+            result.set(ftyp, 0);
+            result.set(moov, ftyp.byteLength);
+            return result;
+        }
 
-      return MP4.box(MP4.types.mp4a, data, MP4.esds(meta));
-    }
-  }, {
-    key: 'esds',
-    value: function esds(meta) {
-      var config = meta.config || [];
-      var configSize = config.length;
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version 0 + flags
+        // Movie metadata box
 
-      0x03, // descriptor_type
-      0x17 + configSize, // length3
-      0x00, 0x01, // es_id
-      0x00, // stream_priority
+    }, {
+        key: 'moov',
+        value: function moov(meta) {
+            var mvhd = MP4.mvhd(meta.timescale, meta.duration);
+            var trak = MP4.trak(meta);
+            var mvex = MP4.mvex(meta);
+            return MP4.box(MP4.types.moov, mvhd, trak, mvex);
+        }
 
-      0x04, // descriptor_type
-      0x0F + configSize, // length
-      0x40, // codec: mpeg4_audio
-      0x15, // stream_type: Audio
-      0x00, 0x00, 0x00, // buffer_size
-      0x00, 0x00, 0x00, 0x00, // maxBitrate
-      0x00, 0x00, 0x00, 0x00, // avgBitrate
+        // Movie header box
 
-      0x05 // descriptor_type
-      ].concat([configSize]).concat(config).concat([0x06, 0x01, 0x02 // GASpecificConfig
-      ]));
-      return MP4.box(MP4.types.esds, data);
-    }
-  }, {
-    key: 'avc1',
-    value: function avc1(meta) {
-      var avcc = meta.avcc;
-      var width = meta.codecWidth,
-          height = meta.codecHeight;
+    }, {
+        key: 'mvhd',
+        value: function mvhd(timescale, duration) {
+            return MP4.box(MP4.types.mvhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // creation_time
+            0x00, 0x00, 0x00, 0x00, // modification_time
+            timescale >>> 24 & 0xFF, // timescale: 4 bytes
+            timescale >>> 16 & 0xFF, timescale >>> 8 & 0xFF, timescale & 0xFF, duration >>> 24 & 0xFF, // duration: 4 bytes
+            duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x00, 0x01, 0x00, 0x00, // Preferred rate: 1.0
+            0x01, 0x00, 0x00, 0x00, // PreferredVolume(1.0, 2bytes) + reserved(2bytes)
+            0x00, 0x00, 0x00, 0x00, // reserved: 4 + 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, // ----begin composition matrix----
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // ----end composition matrix----
+            0x00, 0x00, 0x00, 0x00, // ----begin pre_defined 6 * 4 bytes----
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // ----end pre_defined 6 * 4 bytes----
+            0xFF, 0xFF, 0xFF, 0xFF // next_track_ID
+            ]));
+        }
 
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
-      0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
-      0x00, 0x00, 0x00, 0x00, // pre_defined(2) + reserved(2)
-      0x00, 0x00, 0x00, 0x00, // pre_defined: 3 * 4 bytes
-      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, width >>> 8 & 0xFF, // width: 2 bytes
-      width & 0xFF, height >>> 8 & 0xFF, // height: 2 bytes
-      height & 0xFF, 0x00, 0x48, 0x00, 0x00, // horizresolution: 4 bytes
-      0x00, 0x48, 0x00, 0x00, // vertresolution: 4 bytes
-      0x00, 0x00, 0x00, 0x00, // reserved: 4 bytes
-      0x00, 0x01, // frame_count
-      0x0A, // strlen
-      0x78, 0x71, 0x71, 0x2F, // compressorname: 32 bytes
-      0x66, 0x6C, 0x76, 0x2E, 0x6A, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, // depth
-      0xFF, 0xFF // pre_defined = -1
-      ]);
-      return MP4.box(MP4.types.avc1, data, MP4.box(MP4.types.avcC, avcc));
-    }
+        // Track box
 
-    // Movie Extends box
+    }, {
+        key: 'trak',
+        value: function trak(meta) {
+            return MP4.box(MP4.types.trak, MP4.tkhd(meta), MP4.mdia(meta));
+        }
 
-  }, {
-    key: 'mvex',
-    value: function mvex(meta) {
-      return MP4.box(MP4.types.mvex, MP4.trex(meta));
-    }
+        // Track header box
 
-    // Track Extends box
+    }, {
+        key: 'tkhd',
+        value: function tkhd(meta) {
+            var trackId = meta.id,
+                duration = meta.duration;
+            var width = meta.presentWidth,
+                height = meta.presentHeight;
 
-  }, {
-    key: 'trex',
-    value: function trex(meta) {
-      var trackId = meta.id;
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
-      trackId >>> 24 & 0xFF, // track_ID
-      trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF, 0x00, 0x00, 0x00, 0x01, // default_sample_description_index
-      0x00, 0x00, 0x00, 0x00, // default_sample_duration
-      0x00, 0x00, 0x00, 0x00, // default_sample_size
-      0x00, 0x01, 0x00, 0x01 // default_sample_flags
-      ]);
-      return MP4.box(MP4.types.trex, data);
-    }
+            return MP4.box(MP4.types.tkhd, new Uint8Array([0x00, 0x00, 0x00, 0x07, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // creation_time
+            0x00, 0x00, 0x00, 0x00, // modification_time
+            trackId >>> 24 & 0xFF, // track_ID: 4 bytes
+            trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF, 0x00, 0x00, 0x00, 0x00, // reserved: 4 bytes
+            duration >>> 24 & 0xFF, // duration: 4 bytes
+            duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // layer(2bytes) + alternate_group(2bytes)
+            0x00, 0x00, 0x00, 0x00, // volume(2bytes) + reserved(2bytes)
+            0x00, 0x01, 0x00, 0x00, // ----begin composition matrix----
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, // ----end composition matrix----
+            width >>> 8 & 0xFF, // width and height
+            width & 0xFF, 0x00, 0x00, height >>> 8 & 0xFF, height & 0xFF, 0x00, 0x00]));
+        }
 
-    // Movie fragment box
+        // Media Box
 
-  }, {
-    key: 'moof',
-    value: function moof(track, baseMediaDecodeTime) {
-      return MP4.box(MP4.types.moof, MP4.mfhd(track.sequenceNumber), MP4.traf(track, baseMediaDecodeTime));
-    }
-  }, {
-    key: 'mfhd',
-    value: function mfhd(sequenceNumber) {
-      var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, sequenceNumber >>> 24 & 0xFF, // sequence_number: int32
-      sequenceNumber >>> 16 & 0xFF, sequenceNumber >>> 8 & 0xFF, sequenceNumber & 0xFF]);
-      return MP4.box(MP4.types.mfhd, data);
-    }
+    }, {
+        key: 'mdia',
+        value: function mdia(meta) {
+            return MP4.box(MP4.types.mdia, MP4.mdhd(meta), MP4.hdlr(meta), MP4.minf(meta));
+        }
 
-    // Track fragment box
+        // Media header box
 
-  }, {
-    key: 'traf',
-    value: function traf(track, baseMediaDecodeTime) {
-      var trackId = track.id;
+    }, {
+        key: 'mdhd',
+        value: function mdhd(meta) {
+            var timescale = meta.timescale;
+            var duration = meta.duration;
+            return MP4.box(MP4.types.mdhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            0x00, 0x00, 0x00, 0x00, // creation_time
+            0x00, 0x00, 0x00, 0x00, // modification_time
+            timescale >>> 24 & 0xFF, // timescale: 4 bytes
+            timescale >>> 16 & 0xFF, timescale >>> 8 & 0xFF, timescale & 0xFF, duration >>> 24 & 0xFF, // duration: 4 bytes
+            duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, 0x55, 0xC4, // language: und (undetermined)
+            0x00, 0x00 // pre_defined = 0
+            ]));
+        }
 
-      // Track fragment header box
-      var tfhd = MP4.box(MP4.types.tfhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) & flags
-      trackId >>> 24 & 0xFF, // track_ID
-      trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF]));
-      // Track Fragment Decode Time
-      var tfdt = MP4.box(MP4.types.tfdt, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) & flags
-      baseMediaDecodeTime >>> 24 & 0xFF, // baseMediaDecodeTime: int32
-      baseMediaDecodeTime >>> 16 & 0xFF, baseMediaDecodeTime >>> 8 & 0xFF, baseMediaDecodeTime & 0xFF]));
-      var sdtp = MP4.sdtp(track);
-      var trun = MP4.trun(track, sdtp.byteLength + 16 + 16 + 8 + 16 + 8 + 8);
-      if (trackId === 1) {
-        // console.log(trun)
-      }
-      return MP4.box(MP4.types.traf, tfhd, tfdt, trun, sdtp);
-    }
+        // Media handler reference box
 
-    // Sample Dependency Type box
+    }, {
+        key: 'hdlr',
+        value: function hdlr(meta) {
+            var data = null;
+            if (meta.type === 'audio') {
+                data = MP4.constants.HDLR_AUDIO;
+            } else {
+                data = MP4.constants.HDLR_VIDEO;
+            }
+            return MP4.box(MP4.types.hdlr, data);
+        }
 
-  }, {
-    key: 'sdtp',
-    value: function sdtp(track) {
-      var samples = track.samples || [];
-      var sampleCount = samples.length;
-      var data = new Uint8Array(4 + sampleCount);
-      // 0~4 bytes: version(0) & flags
-      for (var i = 0; i < sampleCount; i++) {
-        var flags = samples[i].flags;
-        data[i + 4] = flags.isLeading << 6 | // is_leading: 2 (bit)
-        flags.dependsOn << 4 | // sample_depends_on
-        flags.isDependedOn << 2 | // sample_is_depended_on
-        flags.hasRedundancy; // sample_has_redundancy
-      }
-      return MP4.box(MP4.types.sdtp, data);
-    }
+        // Media infomation box
 
-    // Track fragment run box
+    }, {
+        key: 'minf',
+        value: function minf(meta) {
+            var xmhd = null;
+            if (meta.type === 'audio') {
+                xmhd = MP4.box(MP4.types.smhd, MP4.constants.SMHD);
+            } else {
+                xmhd = MP4.box(MP4.types.vmhd, MP4.constants.VMHD);
+            }
+            return MP4.box(MP4.types.minf, xmhd, MP4.dinf(), MP4.stbl(meta));
+        }
 
-  }, {
-    key: 'trun',
-    value: function trun(track, offset) {
-      var samples = track.samples || [];
-      var sampleCount = samples.length;
-      var dataSize = 12 + 16 * sampleCount;
-      var data = new Uint8Array(dataSize);
-      offset += 8 + dataSize;
+        // Data infomation box
 
-      data.set([0x00, 0x00, 0x0F, 0x01, // version(0) & flags
-      sampleCount >>> 24 & 0xFF, // sample_count
-      sampleCount >>> 16 & 0xFF, sampleCount >>> 8 & 0xFF, sampleCount & 0xFF, offset >>> 24 & 0xFF, // data_offset
-      offset >>> 16 & 0xFF, offset >>> 8 & 0xFF, offset & 0xFF], 0);
+    }, {
+        key: 'dinf',
+        value: function dinf() {
+            var result = MP4.box(MP4.types.dinf, MP4.box(MP4.types.dref, MP4.constants.DREF));
+            return result;
+        }
 
-      for (var i = 0; i < sampleCount; i++) {
-        // console.log(samples[i].duration)
-        var duration = samples[i].duration;
-        var size = samples[i].size;
-        var flags = samples[i].flags;
-        var cts = samples[i].cts;
-        data.set([duration >>> 24 & 0xFF, // sample_duration
-        duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, size >>> 24 & 0xFF, // sample_size
-        size >>> 16 & 0xFF, size >>> 8 & 0xFF, size & 0xFF, flags.isLeading << 2 | flags.dependsOn, // sample_flags
-        flags.isDependedOn << 6 | flags.hasRedundancy << 4 | flags.isNonSync, 0x00, 0x00, // sample_degradation_priority
-        cts >>> 24 & 0xFF, // sample_composition_time_offset
-        cts >>> 16 & 0xFF, cts >>> 8 & 0xFF, cts & 0xFF], 12 + 16 * i);
-      }
-      return MP4.box(MP4.types.trun, data);
-    }
-  }, {
-    key: 'mdat',
-    value: function mdat(data) {
-      return MP4.box(MP4.types.mdat, data);
-    }
-  }]);
+        // Sample table box
 
-  return MP4;
+    }, {
+        key: 'stbl',
+        value: function stbl(meta) {
+            var result = MP4.box(MP4.types.stbl, // type: stbl
+            MP4.stsd(meta), // Sample Description Table
+            MP4.box(MP4.types.stts, MP4.constants.STTS), // Time-To-Sample
+            MP4.box(MP4.types.stsc, MP4.constants.STSC), // Sample-To-Chunk
+            MP4.box(MP4.types.stsz, MP4.constants.STSZ), // Sample size
+            MP4.box(MP4.types.stco, MP4.constants.STCO) // Chunk offset
+            );
+            return result;
+        }
+
+        // Sample description box
+
+    }, {
+        key: 'stsd',
+        value: function stsd(meta) {
+            if (meta.type === 'audio') {
+                if (meta.codec === 'mp3') {
+                    return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp3(meta));
+                }
+                // else: aac -> mp4a
+                return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp4a(meta));
+            } else {
+                return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.avc1(meta));
+            }
+        }
+    }, {
+        key: 'mp3',
+        value: function mp3(meta) {
+            var channelCount = meta.channelCount;
+            var sampleRate = meta.audioSampleRate;
+
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
+            0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, channelCount, // channelCount(2)
+            0x00, 0x10, // sampleSize(2)
+            0x00, 0x00, 0x00, 0x00, // reserved(4)
+            sampleRate >>> 8 & 0xFF, // Audio sample rate
+            sampleRate & 0xFF, 0x00, 0x00]);
+
+            return MP4.box(MP4.types['.mp3'], data);
+        }
+    }, {
+        key: 'mp4a',
+        value: function mp4a(meta) {
+            var channelCount = meta.channelCount;
+            var sampleRate = meta.audioSampleRate;
+
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
+            0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00, // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, channelCount, // channelCount(2)
+            0x00, 0x10, // sampleSize(2)
+            0x00, 0x00, 0x00, 0x00, // reserved(4)
+            sampleRate >>> 8 & 0xFF, // Audio sample rate
+            sampleRate & 0xFF, 0x00, 0x00]);
+
+            return MP4.box(MP4.types.mp4a, data, MP4.esds(meta));
+        }
+    }, {
+        key: 'esds',
+        value: function esds(meta) {
+            var config = meta.config || [];
+            var configSize = config.length;
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version 0 + flags
+
+            0x03, // descriptor_type
+            0x17 + configSize, // length3
+            0x00, 0x01, // es_id
+            0x00, // stream_priority
+
+            0x04, // descriptor_type
+            0x0F + configSize, // length
+            0x40, // codec: mpeg4_audio
+            0x15, // stream_type: Audio
+            0x00, 0x00, 0x00, // buffer_size
+            0x00, 0x00, 0x00, 0x00, // maxBitrate
+            0x00, 0x00, 0x00, 0x00, // avgBitrate
+
+            0x05 // descriptor_type
+            ].concat([configSize]).concat(config).concat([0x06, 0x01, 0x02 // GASpecificConfig
+            ]));
+            return MP4.box(MP4.types.esds, data);
+        }
+    }, {
+        key: 'avc1',
+        value: function avc1(meta) {
+            var avcc = meta.avcc;
+            var width = meta.codecWidth,
+                height = meta.codecHeight;
+
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // reserved(4)
+            0x00, 0x00, 0x00, 0x01, // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00, // pre_defined(2) + reserved(2)
+            0x00, 0x00, 0x00, 0x00, // pre_defined: 3 * 4 bytes
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, width >>> 8 & 0xFF, // width: 2 bytes
+            width & 0xFF, height >>> 8 & 0xFF, // height: 2 bytes
+            height & 0xFF, 0x00, 0x48, 0x00, 0x00, // horizresolution: 4 bytes
+            0x00, 0x48, 0x00, 0x00, // vertresolution: 4 bytes
+            0x00, 0x00, 0x00, 0x00, // reserved: 4 bytes
+            0x00, 0x01, // frame_count
+            0x0A, // strlen
+            0x78, 0x71, 0x71, 0x2F, // compressorname: 32 bytes
+            0x66, 0x6C, 0x76, 0x2E, 0x6A, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x18, // depth
+            0xFF, 0xFF // pre_defined = -1
+            ]);
+            return MP4.box(MP4.types.avc1, data, MP4.box(MP4.types.avcC, avcc));
+        }
+
+        // Movie Extends box
+
+    }, {
+        key: 'mvex',
+        value: function mvex(meta) {
+            return MP4.box(MP4.types.mvex, MP4.trex(meta));
+        }
+
+        // Track Extends box
+
+    }, {
+        key: 'trex',
+        value: function trex(meta) {
+            var trackId = meta.id;
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) + flags
+            trackId >>> 24 & 0xFF, // track_ID
+            trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF, 0x00, 0x00, 0x00, 0x01, // default_sample_description_index
+            0x00, 0x00, 0x00, 0x00, // default_sample_duration
+            0x00, 0x00, 0x00, 0x00, // default_sample_size
+            0x00, 0x01, 0x00, 0x01 // default_sample_flags
+            ]);
+            return MP4.box(MP4.types.trex, data);
+        }
+
+        // Movie fragment box
+
+    }, {
+        key: 'moof',
+        value: function moof(track, baseMediaDecodeTime) {
+            return MP4.box(MP4.types.moof, MP4.mfhd(track.sequenceNumber), MP4.traf(track, baseMediaDecodeTime));
+        }
+    }, {
+        key: 'mfhd',
+        value: function mfhd(sequenceNumber) {
+            var data = new Uint8Array([0x00, 0x00, 0x00, 0x00, sequenceNumber >>> 24 & 0xFF, // sequence_number: int32
+            sequenceNumber >>> 16 & 0xFF, sequenceNumber >>> 8 & 0xFF, sequenceNumber & 0xFF]);
+            return MP4.box(MP4.types.mfhd, data);
+        }
+
+        // Track fragment box
+
+    }, {
+        key: 'traf',
+        value: function traf(track, baseMediaDecodeTime) {
+            var trackId = track.id;
+
+            // Track fragment header box
+            var tfhd = MP4.box(MP4.types.tfhd, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) & flags
+            trackId >>> 24 & 0xFF, // track_ID
+            trackId >>> 16 & 0xFF, trackId >>> 8 & 0xFF, trackId & 0xFF]));
+            // Track Fragment Decode Time
+            var tfdt = MP4.box(MP4.types.tfdt, new Uint8Array([0x00, 0x00, 0x00, 0x00, // version(0) & flags
+            baseMediaDecodeTime >>> 24 & 0xFF, // baseMediaDecodeTime: int32
+            baseMediaDecodeTime >>> 16 & 0xFF, baseMediaDecodeTime >>> 8 & 0xFF, baseMediaDecodeTime & 0xFF]));
+            var sdtp = MP4.sdtp(track);
+            var trun = MP4.trun(track, sdtp.byteLength + 16 + 16 + 8 + 16 + 8 + 8);
+
+            return MP4.box(MP4.types.traf, tfhd, tfdt, trun, sdtp);
+        }
+
+        // Sample Dependency Type box
+
+    }, {
+        key: 'sdtp',
+        value: function sdtp(track) {
+            var samples = track.samples || [];
+            var sampleCount = samples.length;
+            var data = new Uint8Array(4 + sampleCount);
+            // 0~4 bytes: version(0) & flags
+            for (var i = 0; i < sampleCount; i++) {
+                var flags = samples[i].flags;
+                data[i + 4] = flags.isLeading << 6 | // is_leading: 2 (bit)
+                flags.dependsOn << 4 // sample_depends_on
+                | flags.isDependedOn << 2 // sample_is_depended_on
+                | flags.hasRedundancy; // sample_has_redundancy
+            }
+            return MP4.box(MP4.types.sdtp, data);
+        }
+
+        // Track fragment run box
+
+    }, {
+        key: 'trun',
+        value: function trun(track, offset) {
+            var samples = track.samples || [];
+            var sampleCount = samples.length;
+            var dataSize = 12 + 16 * sampleCount;
+            var data = new Uint8Array(dataSize);
+            offset += 8 + dataSize;
+
+            data.set([0x00, 0x00, 0x0F, 0x01, // version(0) & flags
+            sampleCount >>> 24 & 0xFF, // sample_count
+            sampleCount >>> 16 & 0xFF, sampleCount >>> 8 & 0xFF, sampleCount & 0xFF, offset >>> 24 & 0xFF, // data_offset
+            offset >>> 16 & 0xFF, offset >>> 8 & 0xFF, offset & 0xFF], 0);
+
+            for (var i = 0; i < sampleCount; i++) {
+                var duration = samples[i].duration;
+                var size = samples[i].size;
+                var flags = samples[i].flags;
+                var cts = samples[i].cts;
+                data.set([duration >>> 24 & 0xFF, // sample_duration
+                duration >>> 16 & 0xFF, duration >>> 8 & 0xFF, duration & 0xFF, size >>> 24 & 0xFF, // sample_size
+                size >>> 16 & 0xFF, size >>> 8 & 0xFF, size & 0xFF, flags.isLeading << 2 | flags.dependsOn, // sample_flags
+                flags.isDependedOn << 6 | flags.hasRedundancy << 4 | flags.isNonSync, 0x00, 0x00, // sample_degradation_priority
+                cts >>> 24 & 0xFF, // sample_composition_time_offset
+                cts >>> 16 & 0xFF, cts >>> 8 & 0xFF, cts & 0xFF], 12 + 16 * i);
+            }
+            return MP4.box(MP4.types.trun, data);
+        }
+    }, {
+        key: 'mdat',
+        value: function mdat(data) {
+            return MP4.box(MP4.types.mdat, data);
+        }
+    }]);
+
+    return MP4;
 }();
 
 MP4.init();
@@ -11467,6 +11607,8 @@ var TransmuxingWorker = function TransmuxingWorker(self) {
                 controller.on(_transmuxingEvents2.default.LOADING_COMPLETE, onLoadingComplete.bind(this));
                 controller.on(_transmuxingEvents2.default.RECOVERED_EARLY_EOF, onRecoveredEarlyEof.bind(this));
                 controller.on(_transmuxingEvents2.default.MEDIA_INFO, onMediaInfo.bind(this));
+                controller.on(_transmuxingEvents2.default.METADATA_ARRIVED, onMetaDataArrived.bind(this));
+                controller.on(_transmuxingEvents2.default.SCRIPTDATA_ARRIVED, onScriptDataArrived.bind(this));
                 controller.on(_transmuxingEvents2.default.STATISTICS_INFO, onStatisticsInfo.bind(this));
                 controller.on(_transmuxingEvents2.default.RECOMMEND_SEEKPOINT, onRecommendSeekpoint.bind(this));
                 break;
@@ -11547,6 +11689,22 @@ var TransmuxingWorker = function TransmuxingWorker(self) {
         var obj = {
             msg: _transmuxingEvents2.default.MEDIA_INFO,
             data: mediaInfo
+        };
+        self.postMessage(obj);
+    }
+
+    function onMetaDataArrived(metadata) {
+        var obj = {
+            msg: _transmuxingEvents2.default.METADATA_ARRIVED,
+            data: metadata
+        };
+        self.postMessage(obj);
+    }
+
+    function onScriptDataArrived(data) {
+        var obj = {
+            msg: _transmuxingEvents2.default.SCRIPTDATA_ARRIVED,
+            data: data
         };
         self.postMessage(obj);
     }
@@ -11731,7 +11889,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -11864,7 +12022,12 @@ var MSEController = function () {
                     var sb = this._sourceBuffers[type];
                     if (sb) {
                         if (ms.readyState !== 'closed') {
-                            ms.removeSourceBuffer(sb);
+                            // ms edge can throw an error: Unexpected call to method or property access
+                            try {
+                                ms.removeSourceBuffer(sb);
+                            } catch (error) {
+                                _logger2.default.e(this.TAG, error.message);
+                            }
                             sb.removeEventListener('error', this.e.onSourceBufferError);
                             sb.removeEventListener('updateend', this.e.onSourceBufferUpdateEnd);
                         }
@@ -11907,7 +12070,6 @@ var MSEController = function () {
                 this._pendingSourceBufferInit.push(initSegment);
                 // make sure that this InitSegment is in the front of pending segments queue
                 this._pendingSegments[initSegment.type].push(initSegment);
-                // console.log(`${initSegment.type}`, initSegment)
                 return;
             }
 
@@ -12329,7 +12491,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       * limitations under the License.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       */
 
-var _events = __webpack_require__(2);
+var _events = __webpack_require__(3);
 
 var _events2 = _interopRequireDefault(_events);
 
@@ -12345,7 +12507,7 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-// Player wrapper for browser's native player (HTMLVideoElement) without MediaSource src.
+// Player wrapper for browser's native player (HTMLVideoElement) without MediaSource src. 
 var NativePlayer = function () {
     function NativePlayer(mediaDataSource, config) {
         _classCallCheck(this, NativePlayer);
@@ -12476,10 +12638,7 @@ var NativePlayer = function () {
     }, {
         key: 'play',
         value: function play() {
-            var playPromise = this._mediaElement.play();
-            if (playPromise !== undefined && playPromise) {
-                return playPromise.catch(function () {});
-            } else return undefined;
+            return this._mediaElement.play();
         }
     }, {
         key: 'pause',

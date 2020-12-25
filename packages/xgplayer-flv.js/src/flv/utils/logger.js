@@ -33,6 +33,14 @@ class Log {
         if (!Log.ENABLE_ERROR) {
             return;
         }
+
+        if (console.error) {
+            console.error(str);
+        } else if (console.warn) {
+            console.warn(str);
+        } else {
+            console.log(str);
+        }
     }
 
     static i(tag, msg) {
@@ -47,6 +55,12 @@ class Log {
 
         if (!Log.ENABLE_INFO) {
             return;
+        }
+
+        if (console.info) {
+            console.info(str);
+        } else {
+            console.log(str);
         }
     }
 
@@ -63,6 +77,12 @@ class Log {
         if (!Log.ENABLE_WARN) {
             return;
         }
+
+        if (console.warn) {
+            console.warn(str);
+        } else {
+            console.log(str);
+        }
     }
 
     static d(tag, msg) {
@@ -77,6 +97,12 @@ class Log {
 
         if (!Log.ENABLE_DEBUG) {
             return;
+        }
+
+        if (console.debug) {
+            console.debug(str);
+        } else {
+            console.log(str);
         }
     }
 
@@ -93,6 +119,8 @@ class Log {
         if (!Log.ENABLE_VERBOSE) {
             return;
         }
+
+        console.log(str);
     }
 
 }

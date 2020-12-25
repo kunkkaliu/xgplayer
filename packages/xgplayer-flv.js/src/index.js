@@ -34,8 +34,9 @@ class FlvJsPlayer extends Player {
       player.__flv__ = Flv.createPlayer(this.flvOpts, this.optionalConfig)
       player.createInstance(player.__flv__)
       if(player.config.isLive) {
+        let liveText = player.config.liveText || '正在直播'
         Player.util.addClass(player.root, 'xgplayer-is-live')
-        const live = Player.util.createDom('xg-live', '正在直播', {}, 'xgplayer-live')
+        const live = Player.util.createDom('xg-live', liveText, {}, 'xgplayer-live')
         player.controls.appendChild(live)
       }
     })
@@ -50,18 +51,25 @@ class FlvJsPlayer extends Player {
     flv.load()
     flv.play()
      
-    flv.on(Flv.Events.ERROR, (e) => {
+    flv.on(Flv.Events.ERROR, (e, detail) => {
+      player.emit('flv_error', e, detail)
       player.emit('error', new Player.Errors('other', player.config.url))
     })
-    flv.on(Flv.Events.LOADED_SEI, (timestamp, data) => {
-      player.emit('loaded_sei', timestamp, data);
-    })
+    // flv.on(Flv.Events.LOADED_SEI, (timestamp, data) => {
+    //   player.emit('loaded_sei', timestamp, data);
+    // })
     flv.on(Flv.Events.STATISTICS_INFO, (data) => {
       player.emit("statistics_info",data);
     })
     flv.on(Flv.Events.MEDIA_INFO, (data)=>{
       player.mediainfo = data;
-      player.emit("MEDIA_INFO",data);
+      player.emit("media_info",data);
+    })
+    flv.on(Flv.Events.METADATA_ARRIVED, (data) => {
+      player.emit("metadata_arrived", data);
+    })
+    flv.on(Flv.Events.LOADING_COMPLETE, (data) => {
+      player.emit("loading_complete", data);
     })
     player.once('destroy', () => {
       flv.destroy()
@@ -100,8 +108,9 @@ class FlvJsPlayer extends Player {
     }
     player.__flv__ = Flv.createPlayer(mediaDataSource, this.optionalConfig)
 
-    player.__flv__.attachMediaElement(player.video)
-    player.__flv__.load()
+    // player.__flv__.attachMediaElement(player.video)
+    // player.__flv__.load()
+    this.createInstance(player.__flv__)
   }
 
   switchURL (url) {
@@ -127,4 +136,7 @@ class FlvJsPlayer extends Player {
   }
 }
 FlvJsPlayer.isSupported = Flv.isSupported
+FlvJsPlayer.Events = Flv.Events
+FlvJsPlayer.ErrorTypes = Flv.ErrorTypes
+FlvJsPlayer.ErrorDetails = Flv.ErrorDetails
 export default FlvJsPlayer

@@ -103,7 +103,7 @@ class FlvPlayer {
         this.e = null;
         this._mediaDataSource = null;
 
-        this._emitter.removeAllListeners();
+        this._emitter && this._emitter.removeAllListeners();
         this._emitter = null;
     }
 
@@ -242,6 +242,12 @@ class FlvPlayer {
             this._mediaInfo = mediaInfo;
             this._emitter.emit(PlayerEvents.MEDIA_INFO, Object.assign({}, mediaInfo));
         });
+        this._transmuxer.on(TransmuxingEvents.METADATA_ARRIVED, (metadata) => {
+            this._emitter.emit(PlayerEvents.METADATA_ARRIVED, metadata);
+        });
+        this._transmuxer.on(TransmuxingEvents.SCRIPTDATA_ARRIVED, (data) => {
+            this._emitter.emit(PlayerEvents.SCRIPTDATA_ARRIVED, data);
+        });
         this._transmuxer.on(TransmuxingEvents.STATISTICS_INFO, (statInfo) => {
             this._statisticsInfo = this._fillStatisticsInfo(statInfo);
             this._emitter.emit(PlayerEvents.STATISTICS_INFO, Object.assign({}, this._statisticsInfo));
@@ -251,10 +257,6 @@ class FlvPlayer {
                 this._requestSetTime = true;
                 this._mediaElement.currentTime = milliseconds / 1000;
             }
-        });
-
-        this._transmuxer.on(TransmuxingEvents.LOADED_SEI, (timestamp, data) => {
-            this._emitter.emit(PlayerEvents.LOADED_SEI, timestamp, data);
         });
 
         this._transmuxer.open();
